@@ -72,6 +72,8 @@ export default function HomeScreen() {
           <Header 
             title={`Hello, ${userName} 💕`} 
             subtitle="Welcome back to your love zone" 
+            titleStyle={{ color: '#FFFFFF', fontSize: 28 }}
+            subtitleStyle={{ color: '#FFFFFF', fontSize: 14 }}
           />
           
           {/* Room Decorations */}

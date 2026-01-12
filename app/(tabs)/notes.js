@@ -14,7 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
@@ -34,7 +34,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function NotesScreen() {
   const router = useRouter();
+  const { compose } = useLocalSearchParams();
   const [showCompose, setShowCompose] = useState(false);
+
+  // Auto-open compose modal if coming from shortcut
+  useEffect(() => {
+    if (compose === 'true') {
+      setShowCompose(true);
+    }
+  }, [compose]);
   const [noteType, setNoteType] = useState('doodle'); // 'doodle' is now default
   const [noteContent, setNoteContent] = useState('');
   const [paths, setPaths] = useState([]);

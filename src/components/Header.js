@@ -3,14 +3,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS } from '../constants/theme';
 import { useUserStore } from '../store/store';
 
-export default function Header({ title, subtitle, showHearts = true, rightComponent }) {
+export default function Header({ title, subtitle, showHearts = true, rightComponent, titleStyle, subtitleStyle }) {
   const hearts = useUserStore((state) => state.hearts);
 
   return (
     <View style={styles.header}>
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={[styles.title, titleStyle]}>{title}</Text>
+        {subtitle && <Text style={[styles.subtitle, subtitleStyle]}>{subtitle}</Text>}
       </View>
       {rightComponent ? (
         rightComponent

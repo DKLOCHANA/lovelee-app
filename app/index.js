@@ -49,8 +49,8 @@ export default function SplashScreen() {
           router.replace('/onboarding');
         }
       } else {
-        // Not logged in
-        router.replace('/welcome');
+        // Not logged in - go to intro onboarding
+        router.replace('/intro');
       }
       setChecking(false);
     }, 2000);
