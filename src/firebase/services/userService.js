@@ -45,6 +45,7 @@ export const createUserProfile = async (userId, userData) => {
       isPremium: false,
       premiumExpiry: null,
       hearts: 100,
+      welcomeNotificationShown: false, // Track if welcome notification has been shown
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       settings: {

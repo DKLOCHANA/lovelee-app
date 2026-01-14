@@ -34,14 +34,12 @@ export default function SplashScreen() {
         // User is logged in, check if they have completed onboarding
         try {
           const profile = await getUserProfile(currentUser.uid);
-          if (profile && profile.name && profile.partnerId) {
-            // Fully set up, go to home
+          if (profile && profile.displayName && profile.displayName !== 'User') {
+            // User has set up their name - go to home
+            // Partner connection is optional, can be done from home/profile
             router.replace('/(tabs)/home');
-          } else if (profile && profile.name) {
-            // Has name but no partner, go to onboarding to connect
-            router.replace('/onboarding');
           } else {
-            // No profile or name, go to onboarding
+            // No profile or name not set, go to onboarding
             router.replace('/onboarding');
           }
         } catch (error) {

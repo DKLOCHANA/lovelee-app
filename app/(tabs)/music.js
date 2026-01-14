@@ -7,7 +7,6 @@ import {
   ScrollView,
   Animated,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +15,8 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useUserStore } from '../../src/store/store';
+import CustomAlert from '../../src/components/CustomAlert';
+import Header from '../../src/components/Header';
 
 // Music tracks configuration
 const MUSIC_TRACKS = [
@@ -158,6 +159,20 @@ export default function MusicScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sound, setSound] = useState(null);
+  
+  // Alert state
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttons: [],
+  });
+
+  // Show alert helper
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
 
   // Ensure cache directory exists
   useEffect(() => {
@@ -265,7 +280,7 @@ export default function MusicScreen() {
     } catch (error) {
       console.error('Error playing music:', error);
       setIsLoading(false);
-      Alert.alert('Error', 'Failed to play music. Please try again.');
+      showAlert('error', 'Error', 'Failed to play music. Please try again.');
     }
   };
 
@@ -298,7 +313,8 @@ export default function MusicScreen() {
   // Unlock track with hearts
   const handleUnlockTrack = (track) => {
     if (track.isPremium && !isPremium) {
-      Alert.alert(
+      showAlert(
+        'warning',
         'Premium Required 👑',
         'This track requires a premium subscription.',
         [
@@ -310,15 +326,16 @@ export default function MusicScreen() {
     }
 
     if (hearts < track.cost) {
-      Alert.alert(
+      showAlert(
+        'heart',
         'Not Enough Hearts 💗',
-        `You need ${track.cost} hearts to unlock "${track.name}". You have ${hearts} hearts.`,
-        [{ text: 'OK' }]
+        `You need ${track.cost} hearts to unlock "${track.name}". You have ${hearts} hearts.`
       );
       return;
     }
 
-    Alert.alert(
+    showAlert(
+      'confirm',
       'Unlock Track 🎵',
       `Spend ${track.cost} hearts to unlock "${track.name}"?`,
       [
@@ -341,22 +358,7 @@ export default function MusicScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="chevron-back" size={28} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-
-          <Text style={styles.title}>Music</Text>
-
-          <View style={styles.heartsContainer}>
-            <Text style={styles.heartEmoji}>💗</Text>
-            <Text style={styles.heartsCount}>{hearts}</Text>
-          </View>
-        </View>
+        <Header title="Music" subtitle="Play relaxing tunes together" />
 
         {/* Tracks List */}
         <ScrollView 
@@ -406,6 +408,16 @@ export default function MusicScreen() {
           </View>
         )}
       </SafeAreaView>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
@@ -417,39 +429,6 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-  },
-  backButton: {
-    padding: SPACING.xs,
-  },
-  heartsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.backgroundCard,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.full,
-    ...SHADOWS.small,
-  },
-  heartEmoji: {
-    fontSize: 16,
-    marginRight: SPACING.xs,
-  },
-  heartsCount: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  title: {
-    fontSize: FONTS.sizes.xxxl,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
   },
   scrollView: {
     flex: 1,

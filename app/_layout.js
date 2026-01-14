@@ -6,10 +6,44 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../src/firebase/config';
 import { useUserStore } from '../src/store/store';
 import { COLORS } from '../src/constants/theme';
+import {
+  hasAskedForPermission,
+  requestNotificationPermission,
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+} from '../src/services/notificationService';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const setUser = useUserStore((state) => state.setUser);
+
+  // Request notification permission on first app open
+  useEffect(() => {
+    const setupNotifications = async () => {
+      const hasAsked = await hasAskedForPermission();
+      if (!hasAsked) {
+        // First time - request permission
+        await requestNotificationPermission();
+      }
+    };
+
+    setupNotifications();
+
+    // Set up notification listeners
+    const notificationListener = addNotificationReceivedListener((notification) => {
+      console.log('Notification received:', notification);
+    });
+
+    const responseListener = addNotificationResponseListener((response) => {
+      console.log('Notification tapped:', response);
+      // Handle navigation based on notification data here
+    });
+
+    return () => {
+      notificationListener.remove();
+      responseListener.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // Listen to Firebase auth state changes

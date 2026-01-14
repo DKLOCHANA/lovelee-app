@@ -35,13 +35,7 @@ const SHORTCUTS = [
     route: '/checkins',
     emoji: '📋',
   },
-  {
-    id: 'questions-games',
-    title: 'Questions & Games',
-    icon: 'game-controller',
-    route: '/home',
-    emoji: '🎮',
-  },
+  
   {
     id: 'music',
     title: 'Music Together',
@@ -81,7 +75,7 @@ const SHORTCUTS = [
     id: 'calendar',
     title: 'Special Dates',
     icon: 'calendar',
-    route: '/home',
+    route: '/dates',
     emoji: '📅',
   },
  

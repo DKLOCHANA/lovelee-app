@@ -11,7 +11,6 @@ import {
   Platform,
   PanResponder,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useNotesStore, useUserStore } from '../../src/store/store';
 import Header from '../../src/components/Header';
+import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile } from '../../src/firebase/services/userService';
 import { 
@@ -50,10 +50,13 @@ export default function NotesScreen() {
   const [strokeColor, setStrokeColor] = useState(COLORS.primary);
   const [activeTab, setActiveTab] = useState('all');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showNoteView, setShowNoteView] = useState(false);
+  const [selectedNote, setSelectedNote] = useState(null);
   const strokeColorRef = useRef(COLORS.primary);
   
   // Firebase state
   const [profile, setProfile] = useState(null);
+  const [partnerProfile, setPartnerProfile] = useState(null);
   const [firebaseNotes, setFirebaseNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -64,6 +67,19 @@ export default function NotesScreen() {
   const addHearts = useUserStore((state) => state.addHearts);
   const isPremium = useUserStore((state) => state.isPremium);
 
+  // Alert state
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttons: [],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
+
   // Load profile and subscribe to notes
   useEffect(() => {
     let unsubscribe = null;
@@ -73,6 +89,12 @@ export default function NotesScreen() {
       
       const userProfile = await getUserProfile(auth.currentUser.uid);
       setProfile(userProfile);
+      
+      // Load partner profile for name display
+      if (userProfile?.partnerId) {
+        const partner = await getUserProfile(userProfile.partnerId);
+        setPartnerProfile(partner);
+      }
       
       if (userProfile?.coupleId) {
         // Subscribe to real-time notes
@@ -95,6 +117,44 @@ export default function NotesScreen() {
   // Computed values from Firebase notes
   const sentNotes = firebaseNotes.filter(n => n.senderId === auth.currentUser?.uid);
   const receivedNotes = firebaseNotes.filter(n => n.receiverId === auth.currentUser?.uid);
+
+  // Helper function to format date - show time if same day, otherwise show date
+  const formatNoteDate = (noteDate) => {
+    if (!noteDate) return '';
+    
+    // Handle Firestore Timestamp
+    let date;
+    if (noteDate?.toDate) {
+      date = noteDate.toDate();
+    } else if (noteDate?.seconds) {
+      date = new Date(noteDate.seconds * 1000);
+    } else {
+      date = new Date(noteDate);
+    }
+    
+    if (isNaN(date.getTime())) return '';
+    
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      // Show time for today
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      // Show date for older notes
+      return date.toLocaleDateString();
+    }
+  };
+
+  // Helper to get sender name
+  const getSenderName = (note) => {
+    const isSent = note.senderId === auth.currentUser?.uid;
+    if (isSent) {
+      return profile?.displayName || 'Me';
+    } else {
+      return partnerProfile?.displayName || 'Partner';
+    }
+  };
 
   // Update ref when strokeColor changes
   const handleColorChange = (color) => {
@@ -139,7 +199,10 @@ export default function NotesScreen() {
 
   const handleSendNote = async () => {
     if (!profile?.coupleId || !profile?.partnerId) {
-      Alert.alert('Connect First', 'You need to connect with your partner before sending notes.');
+      setShowCompose(false);
+      setTimeout(() => {
+        showAlert('warning', 'Connect First', 'You need to connect with your partner before sending notes.');
+      }, 300);
       return;
     }
 
@@ -171,7 +234,10 @@ export default function NotesScreen() {
         setCurrentPath('');
         setShowCompose(false);
       } else {
-        Alert.alert('Error', 'Failed to send note. Please try again.');
+        setShowCompose(false);
+        setTimeout(() => {
+          showAlert('error', 'Error', 'Failed to send note. Please try again.');
+        }, 300);
       }
     } else if (noteType === 'text' && noteContent.trim()) {
       // Send to Firebase
@@ -190,7 +256,10 @@ export default function NotesScreen() {
         setNoteContent('');
         setShowCompose(false);
       } else {
-        Alert.alert('Error', 'Failed to send note. Please try again.');
+        setShowCompose(false);
+        setTimeout(() => {
+          showAlert('error', 'Error', 'Failed to send note. Please try again.');
+        }, 300);
       }
     }
   };
@@ -205,17 +274,33 @@ export default function NotesScreen() {
   };
 
   const handleDeleteNote = (noteId) => {
-    Alert.alert(
+    showAlert(
+      'confirm',
       'Delete Note',
       'Are you sure you want to delete this note?',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: async () => {
-          // Delete from Firebase
           await deleteNote(noteId);
         }}
       ]
     );
+  };
+
+  // Open note and mark as read
+  const handleOpenNote = async (note) => {
+    setSelectedNote(note);
+    setShowNoteView(true);
+    
+    // Mark as read if it's a received unread note
+    if (note.receiverId === auth.currentUser?.uid && !note.isRead) {
+      await markNoteAsRead(note.id);
+    }
+  };
+
+  const handleCloseNoteView = () => {
+    setShowNoteView(false);
+    setSelectedNote(null);
   };
 
   const handleLikeNote = async (noteId) => {
@@ -313,21 +398,40 @@ export default function NotesScreen() {
             </View>
           ) : (
             filteredNotes.map((note, index) => (
-              <View key={note.id || index} style={styles.noteCard}>
+              <TouchableOpacity 
+                key={note.id || index} 
+                style={styles.noteCard}
+                onPress={() => handleOpenNote(note)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.noteHeader}>
-                  <View style={styles.noteTypeContainer}>
+                  <View style={styles.senderContainer}>
                     <Ionicons 
-                      name={note.type === 'doodle' ? 'brush-outline' : 'document-text-outline'} 
+                      name={note.senderId === auth.currentUser?.uid ? 'arrow-up-circle' : 'arrow-down-circle'} 
                       size={16} 
-                      color={COLORS.textLight} 
+                      color={note.senderId === auth.currentUser?.uid ? COLORS.primary : COLORS.secondary} 
                     />
-                    <Text style={styles.noteType}>
-                      {note.type === 'doodle' ? 'Doodle' : 'Text'}
+                    <Text style={styles.senderName}>
+                      {getSenderName(note)}
+                    </Text>
+                    {!note.isRead && note.receiverId === auth.currentUser?.uid && (
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadBadgeText}>New</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.noteMetaRight}>
+                    <View style={styles.noteTypeContainer}>
+                      <Ionicons 
+                        name={note.type === 'doodle' ? 'brush-outline' : 'document-text-outline'} 
+                        size={14} 
+                        color={COLORS.textLight} 
+                      />
+                    </View>
+                    <Text style={styles.noteTime}>
+                      {formatNoteDate(note.createdAt)}
                     </Text>
                   </View>
-                  <Text style={styles.noteTime}>
-                    {new Date(note.sentAt).toLocaleDateString()}
-                  </Text>
                 </View>
                 {note.type === 'doodle' ? (
                   <View style={styles.doodlePreview}>
@@ -356,24 +460,18 @@ export default function NotesScreen() {
                   <Text style={styles.noteContent}>{note.content}</Text>
                 )}
                 <View style={styles.noteActions}>
+                  <View style={{ flex: 1 }} />
                   <TouchableOpacity 
                     style={styles.noteAction}
-                    onPress={() => handleLikeNote(note.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteNote(note.id);
+                    }}
                   >
-                    <Ionicons 
-                      name={note.liked ? 'heart' : 'heart-outline'} 
-                      size={20} 
-                      color={note.liked ? COLORS.primary : COLORS.textLight} 
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.noteAction}
-                    onPress={() => handleDeleteNote(note.id)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color={COLORS.textLight} />
+                    <Ionicons name="trash-outline" size={18} color={COLORS.textLight} />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -574,6 +672,96 @@ export default function NotesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Note View Modal */}
+      <Modal
+        visible={showNoteView}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseNoteView}
+      >
+        <View style={styles.noteViewOverlay}>
+          <View style={styles.noteViewModal}>
+            {/* Header */}
+            <View style={styles.noteViewHeader}>
+              <View style={styles.noteViewSenderInfo}>
+                <Ionicons 
+                  name={selectedNote?.senderId === auth.currentUser?.uid ? 'arrow-up-circle' : 'arrow-down-circle'} 
+                  size={20} 
+                  color={selectedNote?.senderId === auth.currentUser?.uid ? COLORS.primary : COLORS.secondary} 
+                />
+                <Text style={styles.noteViewSenderName}>
+                  {selectedNote ? getSenderName(selectedNote) : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleCloseNoteView} style={styles.noteViewCloseBtn}>
+                <Ionicons name="close" size={24} color={COLORS.textLight} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Note Type & Time */}
+            <View style={styles.noteViewMeta}>
+              <View style={styles.noteViewTypeTag}>
+                <Ionicons 
+                  name={selectedNote?.type === 'doodle' ? 'brush-outline' : 'document-text-outline'} 
+                  size={14} 
+                  color={COLORS.textSecondary} 
+                />
+                <Text style={styles.noteViewTypeText}>
+                  {selectedNote?.type === 'doodle' ? 'Doodle' : 'Text Note'}
+                </Text>
+              </View>
+              <Text style={styles.noteViewTime}>
+                {selectedNote ? formatNoteDate(selectedNote.createdAt) : ''}
+              </Text>
+            </View>
+
+            {/* Content */}
+            <View style={styles.noteViewContent}>
+              {selectedNote?.type === 'doodle' ? (
+                <View style={styles.noteViewDoodle}>
+                  <Svg height="250" width="100%" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+                    {(() => {
+                      try {
+                        const doodlePaths = JSON.parse(selectedNote?.content || '[]');
+                        return doodlePaths.map((pathItem, idx) => (
+                          <Path
+                            key={idx}
+                            d={pathItem.path}
+                            stroke={pathItem.color || COLORS.primary}
+                            strokeWidth={3}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        ));
+                      } catch (e) {
+                        return null;
+                      }
+                    })()}
+                  </Svg>
+                </View>
+              ) : (
+                <ScrollView style={styles.noteViewTextScroll} showsVerticalScrollIndicator={false}>
+                  <Text style={styles.noteViewText}>{selectedNote?.content}</Text>
+                </ScrollView>
+              )}
+            </View>
+
+            
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
@@ -675,6 +863,33 @@ const styles = StyleSheet.create({
   noteTime: {
     fontSize: FONTS.sizes.xs,
     color: COLORS.textLight,
+  },
+  senderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  senderName: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: SPACING.xs,
+  },
+  noteMetaRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unreadBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    marginLeft: SPACING.sm,
+  },
+  unreadBadgeText: {
+    color: COLORS.textWhite,
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
   },
   noteContent: {
     fontSize: FONTS.sizes.md,
@@ -934,5 +1149,96 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: COLORS.textSecondary,
     fontSize: FONTS.sizes.sm,
+  },
+  // Note View Modal styles
+  noteViewOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  noteViewModal: {
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: RADIUS.xxl,
+    width: '100%',
+    maxHeight: '80%',
+    ...SHADOWS.large,
+    overflow: 'hidden',
+  },
+  noteViewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.md,
+  },
+  noteViewSenderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  noteViewSenderName: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginLeft: SPACING.sm,
+  },
+  noteViewCloseBtn: {
+    padding: SPACING.sm,
+  },
+  noteViewMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  noteViewTypeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundPink,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  noteViewTypeText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    marginLeft: SPACING.xs,
+  },
+  noteViewTime: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textLight,
+  },
+  noteViewContent: {
+    padding: SPACING.xl,
+    minHeight: 150,
+  },
+  noteViewDoodle: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteViewTextScroll: {
+    maxHeight: 300,
+  },
+  noteViewText: {
+    fontSize: FONTS.sizes.lg,
+    color: COLORS.textPrimary,
+    lineHeight: 28,
+  },
+  noteViewFooter: {
+    alignItems: 'center',
+    paddingBottom: SPACING.xl,
+  },
+  noteViewFooterText: {
+    fontSize: 24,
   },
 });

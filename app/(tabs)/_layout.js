@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { COLORS, FONTS } from '../../src/constants/theme';
+import { useActivityStore } from '../../src/store/store';
 
 function TabIcon({ name, label, focused }) {
   return (
@@ -17,7 +18,9 @@ function TabIcon({ name, label, focused }) {
 }
 
 // Activity Icon with notification badge
-function ActivityTabIcon({ focused, unreadCount }) {
+function ActivityTabIcon({ focused }) {
+  const newNotificationCount = useActivityStore(state => state.newNotificationCount);
+  
   return (
     <View style={[styles.tabIconContainer, focused && styles.tabIconContainerFocused]}>
       <Ionicons 
@@ -25,10 +28,10 @@ function ActivityTabIcon({ focused, unreadCount }) {
         size={22} 
         color={focused ? COLORS.secondary : COLORS.textLight} 
       />
-      {unreadCount > 0 && (
+      {newNotificationCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {newNotificationCount > 9 ? '9+' : newNotificationCount}
           </Text>
         </View>
       )}
@@ -37,8 +40,12 @@ function ActivityTabIcon({ focused, unreadCount }) {
 }
 
 export default function TabLayout() {
-  // Hardcoded unread count - in real app, this would come from a global state or context
-  const [unreadCount, setUnreadCount] = useState(3);
+  const initActivity = useActivityStore(state => state.initActivity);
+  
+  // Initialize activity store on app start
+  useEffect(() => {
+    initActivity();
+  }, []);
 
   return (
     <Tabs
@@ -84,7 +91,7 @@ export default function TabLayout() {
         options={{
           title: 'Activity',
           tabBarIcon: ({ focused }) => (
-            <ActivityTabIcon focused={focused} unreadCount={unreadCount} />
+            <ActivityTabIcon focused={focused} />
           ),
         }}
       />
@@ -128,6 +135,12 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="music"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="dates"
         options={{
           href: null, // Hide from tab bar
         }}

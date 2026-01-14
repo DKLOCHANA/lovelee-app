@@ -23,6 +23,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Animation sources
 const ANIMATIONS = {
   default: require('../../assets/animations/default.json'),
+  eating : require('../../assets/animations/eating.json'),
   sleeping: require('../../assets/animations/sleeping.json'),
   playing: require('../../assets/animations/playing.json'),
   bathing: require('../../assets/animations/bathing.json'),
@@ -210,7 +211,7 @@ export default function PetScreen() {
       feedPet();
       setAction('feed');
       showActionFeedback();
-      playActionAnimation('sleeping');
+      playActionAnimation('eating');
     }
   };
 

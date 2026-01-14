@@ -70,13 +70,7 @@ export default function WelcomeScreen() {
             <Text style={styles.loginButtonText}>Sign In</Text>
           </TouchableOpacity>
 
-          {/* Continue as Guest */}
-          <TouchableOpacity 
-            style={styles.guestButton}
-            onPress={() => router.push('/onboarding')}
-          >
-            <Text style={styles.guestButtonText}>Continue as Guest</Text>
-          </TouchableOpacity>
+          
         </View>
 
         {/* Footer */}

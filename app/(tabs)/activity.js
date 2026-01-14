@@ -1,18 +1,71 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, Modal, PanResponder } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { auth } from '../../src/firebase/config';
-import { getUserProfile } from '../../src/firebase/services/userService';
+import { getUserProfile, updateUserProfile } from '../../src/firebase/services/userService';
+import { useActivityStore } from '../../src/store/store';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = -80;
+const DELETE_BUTTON_WIDTH = 80;
 
-// Notification Card Component with slide animation
-function NotificationCard({ notification, onMarkRead, onDelete, index }) {
+// Notification types configuration
+const NOTIFICATION_CONFIG = {
+  msg: {
+    icon: 'chatbubble-ellipses',
+    color: COLORS.primary,
+    route: '/notes',
+    label: 'Message',
+  },
+  mood: {
+    icon: 'happy',
+    color: '#FFB946',
+    route: '/mood',
+    label: 'Mood',
+  },
+  pet: {
+    icon: 'paw',
+    color: COLORS.secondary,
+    route: '/pet',
+    label: 'Pet',
+  },
+  plant: {
+    icon: 'leaf',
+    color: '#4CAF50',
+    route: '/plant',
+    label: 'Plant',
+  },
+  gift: {
+    icon: 'gift',
+    color: COLORS.accentPurple,
+    route: '/gifts',
+    label: 'Gift',
+  },
+  date: {
+    icon: 'calendar-heart',
+    color: COLORS.heart,
+    route: '/dates',
+    label: 'Date',
+  },
+  app: {
+    icon: 'heart',
+    color: COLORS.heart,
+    route: null, // Shows modal instead
+    label: 'Lovelee',
+  },
+};
+
+// Swipeable Notification Card Component
+function NotificationCard({ notification, onDelete, onPress, index }) {
   const slideAnim = useRef(new Animated.Value(-SCREEN_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const swipeAnim = useRef(new Animated.Value(0)).current;
+  const isSwipeOpenRef = useRef(false);
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
     // Staggered slide-in animation
@@ -39,6 +92,78 @@ function NotificationCard({ notification, onMarkRead, onDelete, index }) {
     ]).start();
   }, []);
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const isOpen = isSwipeOpenRef.current;
+          if (isOpen) {
+            // Already open - allow swiping back (right)
+            const newValue = -DELETE_BUTTON_WIDTH + gestureState.dx;
+            swipeAnim.setValue(Math.max(Math.min(newValue, 0), -DELETE_BUTTON_WIDTH));
+          } else {
+            // Closed - only allow swiping left
+            if (gestureState.dx < 0) {
+              swipeAnim.setValue(Math.max(gestureState.dx, -DELETE_BUTTON_WIDTH));
+            }
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const isOpen = isSwipeOpenRef.current;
+          const velocity = gestureState.vx;
+          
+          if (isOpen) {
+            // If open and swiped right quickly, or moved more than half
+            if (velocity > 0.3 || gestureState.dx > DELETE_BUTTON_WIDTH / 2) {
+              // Close it
+              Animated.spring(swipeAnim, {
+                toValue: 0,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+              }).start();
+              isSwipeOpenRef.current = false;
+              forceUpdate(n => n + 1);
+            } else {
+              // Keep open
+              Animated.spring(swipeAnim, {
+                toValue: -DELETE_BUTTON_WIDTH,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+              }).start();
+            }
+          } else {
+            // If closed and swiped left quickly, or past threshold
+            if (velocity < -0.3 || gestureState.dx < SWIPE_THRESHOLD) {
+              // Open delete button
+              Animated.spring(swipeAnim, {
+                toValue: -DELETE_BUTTON_WIDTH,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+              }).start();
+              isSwipeOpenRef.current = true;
+              forceUpdate(n => n + 1);
+            } else {
+              // Keep closed
+              Animated.spring(swipeAnim, {
+                toValue: 0,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+              }).start();
+            }
+          }
+        },
+      }),
+    []
+  );
+
   const handleDelete = () => {
     // Slide out animation before delete
     Animated.timing(slideAnim, {
@@ -50,104 +175,95 @@ function NotificationCard({ notification, onMarkRead, onDelete, index }) {
     });
   };
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'welcome':
-        return 'heart';
-      case 'note':
-        return 'mail';
-      case 'mood':
-        return 'happy';
-      case 'gift':
-        return 'gift';
-      case 'pet':
-        return 'paw';
-      case 'partner':
-        return 'people';
-      default:
-        return 'notifications';
+  const handleCardPress = () => {
+    if (isSwipeOpenRef.current) {
+      // Close swipe first
+      Animated.spring(swipeAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+      isSwipeOpenRef.current = false;
+      forceUpdate(n => n + 1);
+    } else {
+      onPress(notification);
     }
   };
 
-  const getNotificationColor = (type) => {
-    switch (type) {
-      case 'welcome':
-        return COLORS.heart;
-      case 'note':
-        return COLORS.primary;
-      case 'mood':
-        return COLORS.moodHappy;
-      case 'gift':
-        return COLORS.accentPurple;
-      case 'pet':
-        return COLORS.secondary;
-      case 'partner':
-        return COLORS.accentBlue;
-      default:
-        return COLORS.textLight;
-    }
-  };
+  const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.app;
 
   return (
     <Animated.View
       style={[
-        styles.notificationCard,
-        !notification.read && styles.unreadCard,
+        styles.cardContainer,
         {
-          transform: [
-            { translateX: slideAnim },
-            { scale: scaleAnim },
-          ],
+          transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
           opacity: fadeAnim,
         },
       ]}
     >
-      <View style={styles.notificationContent}>
-        <View style={[styles.iconContainer, { backgroundColor: `${getNotificationColor(notification.type)}20` }]}>
-          <Ionicons 
-            name={getNotificationIcon(notification.type)} 
-            size={24} 
-            color={getNotificationColor(notification.type)} 
-          />
-        </View>
-        
-        <View style={styles.textContainer}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.notificationTitle, !notification.read && styles.unreadTitle]}>
-              {notification.title}
-            </Text>
-            {!notification.read && <View style={styles.unreadDot} />}
-          </View>
-          <Text style={styles.notificationMessage} numberOfLines={2}>
-            {notification.message}
-          </Text>
-          <Text style={styles.notificationTime}>{notification.time}</Text>
-        </View>
-      </View>
-
-      <View style={styles.actionButtons}>
-        {!notification.read && (
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => onMarkRead(notification.id)}
-          >
-            <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={handleDelete}
-        >
-          <Ionicons name="trash" size={22} color={COLORS.error} />
+      {/* Delete Button (behind the card) */}
+      <View style={styles.deleteButtonContainer}>
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+          <Ionicons name="trash" size={24} color={COLORS.textWhite} />
         </TouchableOpacity>
       </View>
+
+      {/* Main Card */}
+      <Animated.View
+        style={[
+          styles.notificationCard,
+          !notification.read && styles.unreadCard,
+          { transform: [{ translateX: swipeAnim }] },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <TouchableOpacity 
+          style={styles.cardTouchable}
+          onPress={handleCardPress}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: `${config.color}20` }]}>
+            <Ionicons name={config.icon} size={24} color={config.color} />
+          </View>
+          
+          <View style={styles.textContainer}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.notificationTitle, !notification.read && styles.unreadTitle]}>
+                {notification.title}
+              </Text>
+              {!notification.read && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={styles.notificationMessage} numberOfLines={2}>
+              {notification.message}
+            </Text>
+            <View style={styles.bottomRow}>
+              <View style={styles.typeTag}>
+                <Text style={[styles.typeText, { color: config.color }]}>{config.label}</Text>
+              </View>
+              <Text style={styles.notificationTime}>{notification.time}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 }
 
 export default function ActivityScreen() {
+  const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [showAppModal, setShowAppModal] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const markAsChecked = useActivityStore(state => state.markAsChecked);
+  const setNotificationCount = useActivityStore(state => state.setNotificationCount);
+
+  // Mark activity as checked when user visits this page
+  useEffect(() => {
+    markAsChecked();
+  }, []);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -155,77 +271,52 @@ export default function ActivityScreen() {
         const userProfile = await getUserProfile(auth.currentUser.uid);
         setProfile(userProfile);
         
-        // Create welcome notification with account details
-        const welcomeNotification = {
-          id: 'welcome-1',
-          type: 'welcome',
-          title: 'Welcome to Lovelee! 💕',
-          message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully. Email: ${auth.currentUser.email}. Start exploring and connect with your partner!`,
-          time: 'Just now',
-          read: false,
-          createdAt: new Date(),
-        };
-
-        // Sample notifications
-        const sampleNotifications = [
-          welcomeNotification,
-          {
-            id: 'tip-1',
-            type: 'note',
-            title: 'Send Your First Love Letter 💌',
-            message: 'Express your feelings by sending a sweet love letter to your partner!',
-            time: '2 min ago',
+        // Build notifications array
+        const notificationsList = [];
+        
+        // Only show welcome notification if it hasn't been shown before
+        if (userProfile && !userProfile.welcomeNotificationShown) {
+          notificationsList.push({
+            id: 'welcome-1',
+            type: 'app',
+            title: 'Welcome to Lovelee! 💕',
+            message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
+            fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${auth.currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
+            time: 'Just now',
             read: false,
             createdAt: new Date(),
-          },
-          {
-            id: 'tip-2',
-            type: 'mood',
-            title: 'Share Your Mood 😊',
-            message: 'Let your partner know how you\'re feeling today. It helps build connection!',
-            time: '5 min ago',
-            read: false,
-            createdAt: new Date(),
-          },
-          {
-            id: 'tip-3',
-            type: 'pet',
-            title: 'Meet Your Pet Piggy 🐷',
-            message: 'Take care of your shared pet together! Feed, play, and watch it grow.',
-            time: '10 min ago',
-            read: true,
-            createdAt: new Date(),
-          },
-          {
-            id: 'tip-4',
-            type: 'gift',
-            title: 'Surprise Your Partner! 🎁',
-            message: 'Send virtual gifts to show your love and appreciation.',
-            time: '15 min ago',
-            read: true,
-            createdAt: new Date(),
-          },
-          {
-            id: 'partner-1',
-            type: 'partner',
-            title: 'Connect with Partner 👫',
-            message: 'Share your unique code with your partner to start your love journey together!',
-            time: '20 min ago',
-            read: true,
-            createdAt: new Date(),
-          },
-        ];
-
-        setNotifications(sampleNotifications);
+          });
+          
+          // Mark welcome notification as shown in Firebase
+          await updateUserProfile(auth.currentUser.uid, {
+            welcomeNotificationShown: true,
+          });
+        }
+        
+        // Add more notifications here as needed
+        
+        setNotifications(notificationsList);
       }
     };
     loadProfile();
   }, []);
 
-  const handleMarkRead = (id) => {
+  const handleNotificationPress = (notification) => {
+    // Mark as read
     setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
+      prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
     );
+
+    const config = NOTIFICATION_CONFIG[notification.type];
+
+    if (notification.type === 'app' || !config?.route) {
+      // Show modal for app notifications
+      setSelectedNotification(notification);
+      setShowAppModal(true);
+    } else {
+      // Navigate to related page
+      router.push(config.route);
+    }
   };
 
   const handleDelete = (id) => {
@@ -234,6 +325,11 @@ export default function ActivityScreen() {
 
   const handleMarkAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const closeModal = () => {
+    setShowAppModal(false);
+    setSelectedNotification(null);
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -256,6 +352,8 @@ export default function ActivityScreen() {
           )}
         </View>
 
+        
+
         {/* Notifications List */}
         <ScrollView 
           style={styles.scrollView}
@@ -267,8 +365,8 @@ export default function ActivityScreen() {
               <NotificationCard
                 key={notification.id}
                 notification={notification}
-                onMarkRead={handleMarkRead}
                 onDelete={handleDelete}
+                onPress={handleNotificationPress}
                 index={index}
               />
             ))
@@ -281,6 +379,33 @@ export default function ActivityScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {/* App Notification Modal */}
+      <Modal
+        visible={showAppModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconContainer, { backgroundColor: `${COLORS.heart}20` }]}>
+                <Ionicons name="heart" size={32} color={COLORS.heart} />
+              </View>
+              <Text style={styles.modalTitle}>{selectedNotification?.title}</Text>
+            </View>
+            
+            <Text style={styles.modalMessage}>
+              {selectedNotification?.fullMessage || selectedNotification?.message}
+            </Text>
+
+            <TouchableOpacity style={styles.modalButton} onPress={closeModal}>
+              <Text style={styles.modalButtonText}>Got it!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -322,6 +447,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.secondary,
   },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+  },
+  hintText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textLight,
+    marginLeft: SPACING.xs,
+  },
   scrollView: {
     flex: 1,
   },
@@ -329,20 +465,41 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     paddingBottom: 120,
   },
+  // Card styles
+  cardContainer: {
+    marginBottom: SPACING.md,
+    position: 'relative',
+  },
+  deleteButtonContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: DELETE_BUTTON_WIDTH,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.error,
+    borderRadius: RADIUS.xl,
+  },
+  deleteButton: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   notificationCard: {
     backgroundColor: COLORS.backgroundCard,
     borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
     ...SHADOWS.medium,
   },
   unreadCard: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.heart,
   },
-  notificationContent: {
+  cardTouchable: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    padding: SPACING.lg,
   },
   iconContainer: {
     width: 48,
@@ -381,23 +538,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 20,
   },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+  },
+  typeTag: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: RADIUS.sm,
+  },
+  typeText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
+  },
   notificationTime: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textLight,
-    marginTop: SPACING.sm,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: SPACING.md,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-  },
-  actionButton: {
-    padding: SPACING.sm,
-    marginLeft: SPACING.md,
-  },
+  // Empty state
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -414,5 +575,60 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     color: COLORS.textSecondary,
     marginTop: SPACING.sm,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  modalContent: {
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: RADIUS.xxl,
+    padding: SPACING.xl,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    ...SHADOWS.large,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: FONTS.sizes.md,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: SPACING.xl,
+  },
+  modalButton: {
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: SPACING.xxl,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    width: '100%',
+  },
+  modalButtonText: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '600',
+    color: COLORS.textWhite,
+    textAlign: 'center',
   },
 });

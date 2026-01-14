@@ -1,10 +1,22 @@
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, SPACING, RADIUS } from '../constants/theme';
-import { useUserStore } from '../store/store';
+import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import { auth } from '../firebase/config';
+import { getUserProfile } from '../firebase/services/userService';
 
-export default function Header({ title, subtitle, showHearts = true, rightComponent, titleStyle, subtitleStyle }) {
-  const hearts = useUserStore((state) => state.hearts);
+export default function Header({ title, subtitle, showHearts = true, rightComponent, titleStyle, subtitleStyle, heartsContainerStyle }) {
+  const [hearts, setHearts] = useState(0);
+
+  useEffect(() => {
+    const loadHearts = async () => {
+      if (auth.currentUser) {
+        const profile = await getUserProfile(auth.currentUser.uid);
+        setHearts(profile?.hearts || 0);
+      }
+    };
+    loadHearts();
+  }, []);
 
   return (
     <View style={styles.header}>
@@ -15,12 +27,11 @@ export default function Header({ title, subtitle, showHearts = true, rightCompon
       {rightComponent ? (
         rightComponent
       ) : showHearts ? (
-        <View style={styles.heartsContainer}>
+        <View style={[styles.heartsContainer, heartsContainerStyle]}>
           <Ionicons 
-            name="heart-outline" 
+            name="heart" 
             size={18} 
-            color={COLORS.primaryDark} 
-            style={styles.heartsIcon} 
+            color={COLORS.secondary} 
           />
           <Text style={styles.heartsCount}>{hearts}</Text>
         </View>
@@ -53,17 +64,16 @@ const styles = StyleSheet.create({
   heartsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.backgroundCard,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.full,
-  },
-  heartsIcon: {
-    marginRight: SPACING.xs,
+    ...SHADOWS.small,
   },
   heartsCount: {
-    fontSize: FONTS.sizes.lg,
+    fontSize: FONTS.sizes.md,
     fontWeight: '700',
-    color: COLORS.primaryDark,
+    color: COLORS.secondary,
+    marginLeft: SPACING.xs,
   },
 });

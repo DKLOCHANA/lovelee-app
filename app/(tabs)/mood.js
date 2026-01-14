@@ -5,13 +5,13 @@ import {
   StyleSheet, 
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useUserStore } from '../../src/store/store';
 import { MOODS } from '../../src/constants/data';
 import Header from '../../src/components/Header';
+import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile } from '../../src/firebase/services/userService';
 import { setMood as firebaseSetMood, subscribeToMoods } from '../../src/firebase/services/moodService';
@@ -25,6 +25,19 @@ export default function MoodScreen() {
   const [selectedMood, setSelectedMood] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Alert state
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttons: [],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
 
   // Load profile and subscribe to moods
   useEffect(() => {
@@ -74,7 +87,7 @@ export default function MoodScreen() {
 
   const handleConfirmMood = async () => {
     if (!profile?.coupleId) {
-      Alert.alert('Connect First', 'You need to connect with your partner before sharing moods.');
+      showAlert('warning', 'Connect First', 'You need to connect with your partner before sharing moods.');
       return;
     }
 
@@ -95,7 +108,7 @@ export default function MoodScreen() {
         setShowConfirmation(true);
         setTimeout(() => setShowConfirmation(false), 2000);
       } else {
-        Alert.alert('Error', 'Failed to share mood. Please try again.');
+        showAlert('error', 'Error', 'Failed to share mood. Please try again.');
       }
     }
   };
@@ -185,6 +198,16 @@ export default function MoodScreen() {
           )}
         </View>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Modal,
   Animated,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +15,7 @@ import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/the
 import { useUserStore } from '../../src/store/store';
 import { GIFTS } from '../../src/constants/data';
 import Header from '../../src/components/Header';
+import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile } from '../../src/firebase/services/userService';
 import { sendGift as firebaseSendGift, subscribeToGifts } from '../../src/firebase/services/giftsService';
@@ -33,6 +33,19 @@ export default function GiftsScreen() {
   const [sentGiftEmoji, setSentGiftEmoji] = useState('');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Alert state
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    buttons: [],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
 
   // Load profile and subscribe to gifts
   useEffect(() => {
@@ -77,7 +90,7 @@ export default function GiftsScreen() {
 
   const handleSendGift = async () => {
     if (!profile?.coupleId || !profile?.partnerId) {
-      Alert.alert('Connect First', 'You need to connect with your partner before sending gifts.');
+      showAlert('warning', 'Connect First', 'You need to connect with your partner before sending gifts.');
       return;
     }
 
@@ -102,7 +115,7 @@ export default function GiftsScreen() {
         setSelectedGift(null);
         setTimeout(() => setShowSentModal(false), 2500);
       } else {
-        Alert.alert('Error', result.error || 'Failed to send gift. Please try again.');
+        showAlert('error', 'Error', result.error || 'Failed to send gift. Please try again.');
       }
     }
   };
@@ -265,6 +278,16 @@ export default function GiftsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

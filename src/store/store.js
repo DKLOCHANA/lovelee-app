@@ -187,3 +187,43 @@ export const useGiftsStore = create((set) => ({
     receivedGifts: [gift, ...state.receivedGifts]
   })),
 }));
+
+// Activity/Notification store
+export const useActivityStore = create((set, get) => ({
+  lastCheckedTime: null,
+  newNotificationCount: 0,
+  
+  // Mark activity as checked (when user visits Activity page)
+  markAsChecked: async () => {
+    const now = new Date().toISOString();
+    set({ lastCheckedTime: now, newNotificationCount: 0 });
+    try {
+      await AsyncStorage.setItem('lastActivityChecked', now);
+    } catch (error) {
+      console.log('Error saving last checked time:', error);
+    }
+  },
+  
+  // Add new notification (increases badge count)
+  addNotification: () => set((state) => ({
+    newNotificationCount: state.newNotificationCount + 1
+  })),
+  
+  // Set notification count directly
+  setNotificationCount: (count) => set({ newNotificationCount: count }),
+  
+  // Initialize from storage
+  initActivity: async () => {
+    try {
+      const lastChecked = await AsyncStorage.getItem('lastActivityChecked');
+      if (lastChecked) {
+        // User has visited activity before, no new notifications
+        set({ lastCheckedTime: lastChecked, newNotificationCount: 0 });
+      }
+      // If no lastChecked, keep count at 0 - the welcome notification
+      // will be handled by the Activity page checking Firebase
+    } catch (error) {
+      console.log('Error loading activity data:', error);
+    }
+  },
+}));

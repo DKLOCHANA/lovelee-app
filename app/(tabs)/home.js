@@ -74,6 +74,7 @@ export default function HomeScreen() {
             subtitle="Welcome back to your love zone" 
             titleStyle={{ color: '#FFFFFF', fontSize: 28 }}
             subtitleStyle={{ color: '#FFFFFF', fontSize: 14 }}
+            heartsContainerStyle={{ backgroundColor: 'rgba(255,255,255,0.9)' }}
           />
           
           {/* Room Decorations */}
