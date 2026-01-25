@@ -22,9 +22,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Animation sources (using pig animations for now - will be replaced with plant animations)
 const ANIMATIONS = {
   default: require('../../assets/animations/plant-default.json'),
-  watering: require('../../assets/animations/playing.json'),
-  fertilizing: require('../../assets/animations/bathing.json'),
-  growing: require('../../assets/animations/sleeping.json'),
+  watering: require('../../assets/animations/watering.json'),
+  fertilizing: require('../../assets/animations/fertilizing.json'),
+  growing: require('../../assets/animations/growing.json'),
+  pruning: require('../../assets/animations/pruning.json'),
 };
 
 export default function PlantScreen() {
