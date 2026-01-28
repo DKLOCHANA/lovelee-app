@@ -263,3 +263,31 @@ export const deleteUserAccount = async (userId) => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Update user's Expo push token for notifications
+ * @param {string} userId 
+ * @param {string} expoPushToken 
+ * @returns {Promise<{success: boolean, error: string|null}>}
+ */
+export const updateExpoPushToken = async (userId, expoPushToken) => {
+  return updateUserProfile(userId, { expoPushToken });
+};
+
+/**
+ * Get partner's profile
+ * @param {string} userId 
+ * @returns {Promise<object|null>}
+ */
+export const getPartnerProfile = async (userId) => {
+  try {
+    const userProfile = await getUserProfile(userId);
+    if (!userProfile || !userProfile.partnerId) {
+      return null;
+    }
+    return await getUserProfile(userProfile.partnerId);
+  } catch (error) {
+    console.error('Error getting partner profile:', error);
+    return null;
+  }
+};

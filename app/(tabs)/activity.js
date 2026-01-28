@@ -4,9 +4,20 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
-import { auth } from '../../src/firebase/config';
+import { auth, db } from '../../src/firebase/config';
 import { getUserProfile, updateUserProfile } from '../../src/firebase/services/userService';
 import { useActivityStore } from '../../src/store/store';
+import { 
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc,
+  writeBatch 
+} from 'firebase/firestore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -80;
@@ -265,47 +276,104 @@ export default function ActivityScreen() {
     markAsChecked();
   }, []);
 
+  // Format time helper
+  const formatTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
+    
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   useEffect(() => {
+    if (!auth.currentUser) return;
+
     const loadProfile = async () => {
-      if (auth.currentUser) {
-        const userProfile = await getUserProfile(auth.currentUser.uid);
-        setProfile(userProfile);
+      const userProfile = await getUserProfile(auth.currentUser.uid);
+      setProfile(userProfile);
+      
+      // Show welcome notification for new users
+      if (userProfile && !userProfile.welcomeNotificationShown) {
+        const welcomeNotification = {
+          id: 'welcome-1',
+          type: 'app',
+          title: 'Welcome to Lovelee! 💕',
+          message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
+          fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${auth.currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
+          time: 'Just now',
+          read: false,
+          isLocal: true,
+          createdAt: new Date(),
+        };
         
-        // Build notifications array
-        const notificationsList = [];
+        setNotifications(prev => [welcomeNotification, ...prev]);
         
-        // Only show welcome notification if it hasn't been shown before
-        if (userProfile && !userProfile.welcomeNotificationShown) {
-          notificationsList.push({
-            id: 'welcome-1',
-            type: 'app',
-            title: 'Welcome to Lovelee! 💕',
-            message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
-            fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${auth.currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
-            time: 'Just now',
-            read: false,
-            createdAt: new Date(),
-          });
-          
-          // Mark welcome notification as shown in Firebase
-          await updateUserProfile(auth.currentUser.uid, {
-            welcomeNotificationShown: true,
-          });
-        }
-        
-        // Add more notifications here as needed
-        
-        setNotifications(notificationsList);
+        // Mark welcome notification as shown in Firebase
+        await updateUserProfile(auth.currentUser.uid, {
+          welcomeNotificationShown: true,
+        });
       }
     };
     loadProfile();
+
+    // Subscribe to Firestore notifications
+    const notificationsRef = collection(db, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('userId', '==', auth.currentUser.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const firestoreNotifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        time: formatTime(doc.data().createdAt),
+        isLocal: false,
+      }));
+      
+      setNotifications(prev => {
+        // Keep local notifications (like welcome) and add Firestore notifications
+        const localNotifications = prev.filter(n => n.isLocal);
+        return [...localNotifications, ...firestoreNotifications];
+      });
+
+      // Update unread count in store
+      const unreadCount = firestoreNotifications.filter(n => !n.read).length;
+      setNotificationCount(unreadCount);
+    }, (error) => {
+      console.error('Error fetching notifications:', error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const handleNotificationPress = (notification) => {
-    // Mark as read
-    setNotifications(prev => 
-      prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
-    );
+  const handleNotificationPress = async (notification) => {
+    // Mark as read in Firestore
+    if (!notification.isLocal && !notification.read) {
+      try {
+        const notificationRef = doc(db, 'notifications', notification.id);
+        await updateDoc(notificationRef, { read: true });
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+    
+    // Mark local notifications as read in state
+    if (notification.isLocal) {
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+      );
+    }
 
     const config = NOTIFICATION_CONFIG[notification.type];
 
@@ -319,11 +387,41 @@ export default function ActivityScreen() {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
+    const notification = notifications.find(n => n.id === id);
+    
+    // Delete from Firestore if not a local notification
+    if (notification && !notification.isLocal) {
+      try {
+        const notificationRef = doc(db, 'notifications', id);
+        await deleteDoc(notificationRef);
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+      }
+    }
+    
+    // Remove from local state
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
+    // Mark all Firestore notifications as read
+    const unreadNotifications = notifications.filter(n => !n.read && !n.isLocal);
+    
+    if (unreadNotifications.length > 0) {
+      try {
+        const batch = writeBatch(db);
+        unreadNotifications.forEach(n => {
+          const notificationRef = doc(db, 'notifications', n.id);
+          batch.update(notificationRef, { read: true });
+        });
+        await batch.commit();
+      } catch (error) {
+        console.error('Error marking all as read:', error);
+      }
+    }
+    
+    // Update local state for local notifications
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 

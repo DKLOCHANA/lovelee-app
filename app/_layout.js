@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
@@ -9,6 +9,7 @@ import { COLORS } from '../src/constants/theme';
 import {
   hasAskedForPermission,
   requestNotificationPermission,
+  registerForPushNotifications,
   addNotificationReceivedListener,
   addNotificationResponseListener,
 } from '../src/services/notificationService';
@@ -16,6 +17,7 @@ import {
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const setUser = useUserStore((state) => state.setUser);
+  const router = useRouter();
 
   // Request notification permission on first app open
   useEffect(() => {
@@ -36,7 +38,32 @@ export default function RootLayout() {
 
     const responseListener = addNotificationResponseListener((response) => {
       console.log('Notification tapped:', response);
-      // Handle navigation based on notification data here
+      // Handle navigation based on notification data
+      const data = response.notification.request.content.data;
+      if (data?.type) {
+        switch (data.type) {
+          case 'note':
+            router.push('/notes');
+            break;
+          case 'mood':
+            router.push('/mood');
+            break;
+          case 'gift':
+            router.push('/gifts');
+            break;
+          case 'pet':
+            router.push('/pet');
+            break;
+          case 'plant':
+            router.push('/plant');
+            break;
+          case 'date':
+            router.push('/dates');
+            break;
+          default:
+            router.push('/activity');
+        }
+      }
     });
 
     return () => {
@@ -47,13 +74,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Listen to Firebase auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // Update Zustand store with basic user info for local state
         setUser({
           uid: user.uid,
           email: user.email,
         });
+
+        // Register for push notifications and save token to Firebase
+        await registerForPushNotifications(user.uid);
       } else {
         setUser(null);
       }

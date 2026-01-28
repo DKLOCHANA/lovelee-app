@@ -64,13 +64,13 @@ const SHORTCUTS = [
     route: '/gifts',
     emoji: '🎁',
   },
-  {
-    id: 'customize',
-    title: 'Customize Widget',
-    icon: 'color-palette',
-    route: '/home',
-    emoji: '🎨',
-  },
+  // {
+  //   id: 'customize',
+  //   title: 'Customize Widget',
+  //   icon: 'color-palette',
+  //   route: '/home',
+  //   emoji: '🎨',
+  // },
   {
     id: 'calendar',
     title: 'Special Dates',

@@ -1,8 +1,10 @@
 // Notification Service - Handles push notification setup and permissions
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { updateExpoPushToken } from '../firebase/services/userService';
 
 const NOTIFICATION_ASKED_KEY = '@notification_permission_asked';
 
@@ -89,9 +91,10 @@ export const requestNotificationPermission = async () => {
 
 /**
  * Register for push notifications and get the expo push token
+ * @param {string|null} userId - Optional user ID to save token to Firebase
  * @returns {Promise<string|null>}
  */
-export const registerForPushNotifications = async () => {
+export const registerForPushNotifications = async (userId = null) => {
   try {
     const { granted } = await requestNotificationPermission();
     
@@ -99,9 +102,13 @@ export const registerForPushNotifications = async () => {
       return null;
     }
 
+    // Get the project ID from expo config
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? 
+                      Constants.easConfig?.projectId;
+
     // Get the Expo push token
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-project-id', // You can configure this in app.json
+      projectId,
     });
 
     // For Android, set up notification channel
@@ -112,6 +119,11 @@ export const registerForPushNotifications = async () => {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF69B4', // Pink color matching app theme
       });
+    }
+
+    // Save token to Firebase if user is logged in
+    if (userId && tokenData.data) {
+      await updateExpoPushToken(userId, tokenData.data);
     }
 
     return tokenData.data;
