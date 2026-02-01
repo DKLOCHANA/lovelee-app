@@ -295,67 +295,100 @@ export default function ActivityScreen() {
   };
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      // Clear notifications if no user
+      setNotifications([]);
+      setNotificationCount(0);
+      return;
+    }
+
+    const userId = currentUser.uid;
+    let unsubscribe = null;
 
     const loadProfile = async () => {
-      const userProfile = await getUserProfile(auth.currentUser.uid);
-      setProfile(userProfile);
-      
-      // Show welcome notification for new users
-      if (userProfile && !userProfile.welcomeNotificationShown) {
-        const welcomeNotification = {
-          id: 'welcome-1',
-          type: 'app',
-          title: 'Welcome to Lovelee! 💕',
-          message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
-          fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${auth.currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
-          time: 'Just now',
-          read: false,
-          isLocal: true,
-          createdAt: new Date(),
-        };
+      try {
+        const userProfile = await getUserProfile(userId);
+        setProfile(userProfile);
         
-        setNotifications(prev => [welcomeNotification, ...prev]);
-        
-        // Mark welcome notification as shown in Firebase
-        await updateUserProfile(auth.currentUser.uid, {
-          welcomeNotificationShown: true,
-        });
+        // Show welcome notification for new users
+        if (userProfile && !userProfile.welcomeNotificationShown) {
+          const welcomeNotification = {
+            id: 'welcome-1',
+            type: 'app',
+            title: 'Welcome to Lovelee! 💕',
+            message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
+            fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
+            time: 'Just now',
+            read: false,
+            isLocal: true,
+            createdAt: new Date(),
+          };
+          
+          setNotifications(prev => [welcomeNotification, ...prev]);
+          
+          // Mark welcome notification as shown in Firebase
+          await updateUserProfile(userId, {
+            welcomeNotificationShown: true,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
       }
     };
     loadProfile();
 
-    // Subscribe to Firestore notifications
-    const notificationsRef = collection(db, 'notifications');
-    const q = query(
-      notificationsRef,
-      where('userId', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
+    // Subscribe to Firestore notifications with a slight delay to ensure auth is ready
+    const setupSubscription = () => {
+      try {
+        const notificationsRef = collection(db, 'notifications');
+        const q = query(
+          notificationsRef,
+          where('userId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const firestoreNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        time: formatTime(doc.data().createdAt),
-        isLocal: false,
-      }));
-      
-      setNotifications(prev => {
-        // Keep local notifications (like welcome) and add Firestore notifications
-        const localNotifications = prev.filter(n => n.isLocal);
-        return [...localNotifications, ...firestoreNotifications];
-      });
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const firestoreNotifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            time: formatTime(doc.data().createdAt),
+            isLocal: false,
+          }));
+          
+          setNotifications(prev => {
+            // Keep local notifications (like welcome) and add Firestore notifications
+            const localNotifications = prev.filter(n => n.isLocal);
+            return [...localNotifications, ...firestoreNotifications];
+          });
 
-      // Update unread count in store
-      const unreadCount = firestoreNotifications.filter(n => !n.read).length;
-      setNotificationCount(unreadCount);
-    }, (error) => {
-      console.error('Error fetching notifications:', error);
-    });
+          // Update unread count in store
+          const unreadCount = firestoreNotifications.filter(n => !n.read).length;
+          setNotificationCount(unreadCount);
+        }, (error) => {
+          // Handle permission errors gracefully
+          if (error.code === 'permission-denied') {
+            console.warn('Notifications: Permission denied - user may have logged out');
+            setNotifications(prev => prev.filter(n => n.isLocal));
+          } else {
+            console.error('Error fetching notifications:', error);
+          }
+        });
+      } catch (error) {
+        console.error('Error setting up notifications subscription:', error);
+      }
+    };
 
-    return () => unsubscribe();
-  }, []);
+    // Small delay to ensure auth token is fully ready
+    const timeoutId = setTimeout(setupSubscription, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [auth.currentUser?.uid]);
 
   const handleNotificationPress = async (notification) => {
     // Mark as read in Firestore
