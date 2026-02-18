@@ -1,4 +1,4 @@
-// Lovelee App Theme - Soft, Romantic, Cute Aesthetic
+// Pairly App Theme - Soft, Romantic, Cute Aesthetic
 
 export const COLORS = {
   // Primary Colors

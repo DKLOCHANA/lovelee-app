@@ -1,5 +1,5 @@
 // Firestore Database Structure Documentation
-// This file documents the database schema for the Lovelee app
+// This file documents the database schema for the Pairly app
 
 /*
 ===========================================

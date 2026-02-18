@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Lovelee",
-    "slug": "lovelee-app",
+    "name": "Pairly",
+    "slug": "pairly-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "lovelee",
+    "scheme": "pairly",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lovelee.app",
+      "bundleIdentifier": "com.pairly.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFF5F5"
       },
-      "package": "com.lovelee.app",
+      "package": "com.pairly.app",
       "edgeToEdgeEnabled": true
     },
     "web": {

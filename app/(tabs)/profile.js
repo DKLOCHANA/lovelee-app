@@ -259,7 +259,7 @@ export default function ProfileScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Join me on Lovelee! Use my invite code: ${profileData.inviteCode}`,
+        message: `Join me on Pairly! Use my invite code: ${profileData.inviteCode}`,
       });
     } catch (error) {
       console.log('Error sharing:', error);
@@ -527,7 +527,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.premiumTextContainer}>
               <Text style={styles.premiumTitle}>
-                {profileData.isPremium ? 'Lovelee Pro' : 'Upgrade to Pro'}
+                {profileData.isPremium ? 'Pairly Pro' : 'Upgrade to Pro'}
               </Text>
               <Text style={styles.premiumSubtext}>
                 {profileData.isPremium ? 'You have all premium features!' : 'Unlock unlimited features'}
@@ -553,7 +553,7 @@ export default function ProfileScreen() {
 
         {/* App Info */}
         <View style={styles.appInfoContainer}>
-          <Text style={styles.appInfoText}>Lovelee v1.0.0</Text>
+          <Text style={styles.appInfoText}>Pairly v1.0.0</Text>
           
         </View>
 

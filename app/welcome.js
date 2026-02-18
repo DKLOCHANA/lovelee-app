@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
           <View style={styles.heartContainer}>
             <Text style={styles.heartEmoji}>💕</Text>
           </View>
-          <Text style={styles.title}>lovelee</Text>
+          <Text style={styles.title}>pairly</Text>
           <Text style={styles.subtitle}>grow your love together</Text>
         </View>
 

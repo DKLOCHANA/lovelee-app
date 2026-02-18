@@ -1,5 +1,5 @@
 /**
- * Firebase Cloud Functions for Lovelee App
+ * Firebase Cloud Functions for Pairly App
  * Handles push notifications for various app events
  */
 

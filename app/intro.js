@@ -22,7 +22,7 @@ const INTRO_SLIDES = [
   {
     id: 1,
     animation: require('../assets/animations/default.json'),
-    title: 'welcome to lovelee',
+    title: 'welcome to pairly',
     subtitle: 'a shared place for your love',
   },
   {
@@ -59,7 +59,7 @@ const QUESTIONS = [
     ],
     analytics: {
       title: 'Every love story is unique! 💕',
-      subtitle: 'Lovelee adapts to your journey',
+      subtitle: 'Pairly adapts to your journey',
       stats: [
         { value: '92%', label: 'of couples feel more connected within the first week' },
       ],
@@ -77,18 +77,18 @@ const QUESTIONS = [
       { id: 'fun', emoji: '🎮', label: 'Having fun together', description: 'Keeping things playful' },
     ],
     analytics: {
-      title: 'Connect 3x more with Lovelee',
+      title: 'Connect 3x more with Pairly',
       subtitle: 'vs trying to remember on your own',
       showComparison: true,
       comparison: {
         cardTitle: 'Your Daily Connection',
-        leftLabel: 'Without\nLovelee',
+        leftLabel: 'Without\nPairly',
         leftValue: '1x',
         leftHeight: 80,
-        rightLabel: 'With\nLovelee',
+        rightLabel: 'With\nPairly',
         rightValue: '3x',
         rightHeight: 200,
-        bottomText: 'Lovelee makes staying connected effortless and fun',
+        bottomText: 'Pairly makes staying connected effortless and fun',
       },
       tip: 'Our love notes and mood check-ins help you stay connected in the way that matters most to you.',
     },
@@ -107,7 +107,7 @@ const QUESTIONS = [
       title: 'Perfect timing matters! ⏰',
       subtitle: 'We\'ll help you build loving habits',
       stats: [
-        { value: '89%', label: 'of couples say Lovelee reminds them to show love more often' },
+        { value: '89%', label: 'of couples say Pairly reminds them to show love more often' },
       ],
       tip: 'Whether it\'s a quick doodle or a heartfelt note, we make connecting effortless.',
     },
@@ -124,7 +124,7 @@ const QUESTIONS = [
     ],
     analytics: {
       title: 'You\'re ready to grow together! 🌟',
-      subtitle: 'Couples like you thrive with Lovelee',
+      subtitle: 'Couples like you thrive with Pairly',
       stats: [
         { value: '94%', label: 'report feeling happier and more loved' },
       ],
@@ -314,7 +314,7 @@ export default function IntroScreen() {
                 {/* Right Bar - With App */}
                 <View style={styles.comparisonBarWrapper}>
                   <Text style={[styles.comparisonBarLabel, styles.comparisonBarLabelHighlight]}>
-                    With{'\n'}<Text style={styles.lovelee}>Lovelee</Text>
+                    With{'\n'}<Text style={styles.pairly}>Pairly</Text>
                   </Text>
                   <View style={styles.comparisonBarOuter}>
                     <View style={[styles.comparisonBarRight, { height: analytics.comparison.rightHeight }]}>
@@ -681,7 +681,7 @@ const styles = StyleSheet.create({
   comparisonBarLabelHighlight: {
     color: COLORS.textPrimary,
   },
-  lovelee: {
+  pairly: {
     color: COLORS.secondary,
     fontWeight: '700',
   },

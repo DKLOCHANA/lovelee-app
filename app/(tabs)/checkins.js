@@ -174,7 +174,7 @@ function CheckInCard({ checkIn, onPress, index, completionData }) {
   );
 }
 
-const STORAGE_KEY = '@lovelee_checkin_completions';
+const STORAGE_KEY = '@pairly_checkin_completions';
 
 export default function CheckInsScreen() {
   const router = useRouter();

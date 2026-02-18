@@ -65,7 +65,7 @@ const NOTIFICATION_CONFIG = {
     icon: 'heart',
     color: COLORS.heart,
     route: null, // Shows modal instead
-    label: 'Lovelee',
+    label: 'Pairly',
   },
 };
 
@@ -316,7 +316,7 @@ export default function ActivityScreen() {
           const welcomeNotification = {
             id: 'welcome-1',
             type: 'app',
-            title: 'Welcome to Lovelee! 💕',
+            title: 'Welcome to Pairly! 💕',
             message: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.`,
             fullMessage: `Hey ${userProfile?.displayName || 'there'}! Your account was created successfully.\n\nEmail: ${currentUser.email}\n\nStart exploring and connect with your partner! Send love notes, track moods, care for your virtual pet together, and create beautiful memories.\n\nEnjoy your journey! 💕`,
             time: 'Just now',

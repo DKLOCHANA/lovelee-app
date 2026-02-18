@@ -108,7 +108,7 @@ export default function OnboardingScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.heartEmoji}>💕</Text>
-            <Text style={styles.title}>lovelee</Text>
+            <Text style={styles.title}>pairly</Text>
           </View>
 
           {/* Step 1: Enter Name */}
