@@ -15,17 +15,18 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pairly.app",
+      "bundleIdentifier": "com.pairlyapp.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "CLNUVH5GRA"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFF5F5"
       },
-      "package": "com.pairly.app",
+      "package": "com.pairlyapp.app",
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -43,9 +44,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d98d0d9a-5374-49b5-8761-f67300b74f4f"
+        "projectId": "fa4f1158-9905-4750-89c8-e54997a67ab8"
       }
     },
-    "owner": "lochanad23"
+    "owner": "kavindu_k"
   }
 }

@@ -7,6 +7,7 @@ import { auth } from '../src/firebase/config';
 import { useUserStore } from '../src/store/store';
 import { COLORS } from '../src/constants/theme';
 import {
+  initNotificationHandler,
   hasAskedForPermission,
   requestNotificationPermission,
   registerForPushNotifications,
@@ -19,52 +20,66 @@ export default function RootLayout() {
   const setUser = useUserStore((state) => state.setUser);
   const router = useRouter();
 
-  // Request notification permission on first app open
+  // Initialize notification handler and set up listeners
   useEffect(() => {
-    const setupNotifications = async () => {
-      const hasAsked = await hasAskedForPermission();
-      if (!hasAsked) {
-        // First time - request permission
-        await requestNotificationPermission();
-      }
-    };
+    let notificationListener = { remove: () => {} };
+    let responseListener = { remove: () => {} };
 
-    setupNotifications();
+    try {
+      // Initialize the notification handler (safe — wrapped internally)
+      initNotificationHandler();
 
-    // Set up notification listeners
-    const notificationListener = addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification);
-    });
-
-    const responseListener = addNotificationResponseListener((response) => {
-      console.log('Notification tapped:', response);
-      // Handle navigation based on notification data
-      const data = response.notification.request.content.data;
-      if (data?.type) {
-        switch (data.type) {
-          case 'note':
-            router.push('/notes');
-            break;
-          case 'mood':
-            router.push('/mood');
-            break;
-          case 'gift':
-            router.push('/gifts');
-            break;
-          case 'pet':
-            router.push('/pet');
-            break;
-          case 'plant':
-            router.push('/plant');
-            break;
-          case 'date':
-            router.push('/dates');
-            break;
-          default:
-            router.push('/activity');
+      // Request permission on first app open
+      const setupNotifications = async () => {
+        try {
+          const hasAsked = await hasAskedForPermission();
+          if (!hasAsked) {
+            await requestNotificationPermission();
+          }
+        } catch (error) {
+          console.error('[Layout] Notification permission setup failed:', error);
         }
-      }
-    });
+      };
+
+      setupNotifications();
+
+      // Set up notification listeners (safe — return no-op on failure)
+      notificationListener = addNotificationReceivedListener((notification) => {
+        console.log('Notification received:', notification);
+      });
+
+      responseListener = addNotificationResponseListener((response) => {
+        console.log('Notification tapped:', response);
+        // Handle navigation based on notification data
+        const data = response.notification.request.content.data;
+        if (data?.type) {
+          switch (data.type) {
+            case 'note':
+              router.push('/notes');
+              break;
+            case 'mood':
+              router.push('/mood');
+              break;
+            case 'gift':
+              router.push('/gifts');
+              break;
+            case 'pet':
+              router.push('/pet');
+              break;
+            case 'plant':
+              router.push('/plant');
+              break;
+            case 'date':
+              router.push('/dates');
+              break;
+            default:
+              router.push('/activity');
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[Layout] Notification setup failed:', error);
+    }
 
     return () => {
       notificationListener.remove();
@@ -75,17 +90,21 @@ export default function RootLayout() {
   useEffect(() => {
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Update Zustand store with basic user info for local state
-        setUser({
-          uid: user.uid,
-          email: user.email,
-        });
+      try {
+        if (user) {
+          // Update Zustand store with basic user info for local state
+          setUser({
+            uid: user.uid,
+            email: user.email,
+          });
 
-        // Register for push notifications and save token to Firebase
-        await registerForPushNotifications(user.uid);
-      } else {
-        setUser(null);
+          // Register for push notifications and save token to Firebase
+          await registerForPushNotifications(user.uid);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('[Layout] Auth/notification registration error:', error);
       }
       setIsReady(true);
     });
