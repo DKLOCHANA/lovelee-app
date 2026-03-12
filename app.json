@@ -45,16 +45,9 @@
     "extra": {
       "router": {},
       "eas": {
-<<<<<<< HEAD
         "projectId": "345ac956-8829-4c4f-aa7b-58be4cdc690f"
       }
     },
     "owner": "lochanaclaudedev"
-=======
-        "projectId": "fa4f1158-9905-4750-89c8-e54997a67ab8"
-      }
-    },
-    "owner": "kavindu_k"
->>>>>>> ce55440ebbc70156c2354a3e514aa4f95858474a
   }
 }
