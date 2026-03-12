@@ -1,21 +1,71 @@
 // Notification Service - Handles push notification setup and permissions
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
+// Native modules are lazy-loaded to prevent TurboModule crashes at import time
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { updateExpoPushToken } from '../firebase/services/userService';
 
 const NOTIFICATION_ASKED_KEY = '@notification_permission_asked';
 
-// Configure how notifications appear when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Lazy-load native modules to catch TurboModule init errors
+let _Notifications = null;
+let _Device = null;
+let _Constants = null;
+
+function getNotifications() {
+  if (!_Notifications) {
+    try {
+      _Notifications = require('expo-notifications');
+    } catch (error) {
+      console.error('[Notifications] Failed to load expo-notifications:', error);
+      return null;
+    }
+  }
+  return _Notifications;
+}
+
+function getDevice() {
+  if (!_Device) {
+    try {
+      _Device = require('expo-device');
+    } catch (error) {
+      console.error('[Notifications] Failed to load expo-device:', error);
+      return null;
+    }
+  }
+  return _Device;
+}
+
+function getConstants() {
+  if (!_Constants) {
+    try {
+      _Constants = require('expo-constants');
+    } catch (error) {
+      console.error('[Notifications] Failed to load expo-constants:', error);
+      return null;
+    }
+  }
+  return _Constants;
+}
+
+/**
+ * Initialize the notification handler (call once at app startup).
+ * Must be called explicitly instead of running at module scope.
+ */
+export const initNotificationHandler = () => {
+  try {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch (error) {
+    console.error('[Notifications] Failed to set notification handler:', error);
+  }
+};
 
 /**
  * Check if we've already asked for notification permission
@@ -46,6 +96,9 @@ export const setPermissionAsked = async () => {
  */
 export const getNotificationStatus = async () => {
   try {
+    const Notifications = getNotifications();
+    if (!Notifications) return false;
+
     const { status } = await Notifications.getPermissionsAsync();
     return status === 'granted';
   } catch {
@@ -59,8 +112,12 @@ export const getNotificationStatus = async () => {
  */
 export const requestNotificationPermission = async () => {
   try {
+    const Notifications = getNotifications();
+    const Device = getDevice();
+    if (!Notifications) return { granted: false, status: 'error' };
+
     // Check if it's a physical device (notifications don't work on simulators for iOS)
-    if (!Device.isDevice) {
+    if (Device && !Device.isDevice) {
       console.log('Notifications only work on physical devices');
       return { granted: false, status: 'unavailable' };
     }
@@ -96,6 +153,10 @@ export const requestNotificationPermission = async () => {
  */
 export const registerForPushNotifications = async (userId = null) => {
   try {
+    const Notifications = getNotifications();
+    const ExpoConstants = getConstants();
+    if (!Notifications) return null;
+
     const { granted } = await requestNotificationPermission();
     
     if (!granted) {
@@ -103,8 +164,12 @@ export const registerForPushNotifications = async (userId = null) => {
     }
 
     // Get the project ID from expo config
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? 
-                      Constants.easConfig?.projectId;
+    const projectId = ExpoConstants?.default?.expoConfig?.extra?.eas?.projectId ?? 
+                      ExpoConstants?.default?.easConfig?.projectId;
+
+    if (!projectId) {
+      console.warn('[Notifications] No projectId found — push token may fail');
+    }
 
     // Get the Expo push token
     const tokenData = await Notifications.getExpoPushTokenAsync({
@@ -123,6 +188,7 @@ export const registerForPushNotifications = async (userId = null) => {
 
     // Save token to Firebase if user is logged in
     if (userId && tokenData.data) {
+      const { updateExpoPushToken } = require('../firebase/services/userService');
       await updateExpoPushToken(userId, tokenData.data);
     }
 
@@ -141,13 +207,20 @@ export const registerForPushNotifications = async (userId = null) => {
  */
 export const scheduleLocalNotification = async (title, body, seconds = 1) => {
   try {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         sound: true,
       },
-      trigger: { seconds },
+      trigger: {
+        type: 'timeInterval',
+        seconds,
+        repeats: false,
+      },
     });
   } catch (error) {
     console.error('Error scheduling notification:', error);
@@ -159,6 +232,9 @@ export const scheduleLocalNotification = async (title, body, seconds = 1) => {
  */
 export const cancelAllNotifications = async () => {
   try {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (error) {
     console.error('Error canceling notifications:', error);
@@ -171,7 +247,15 @@ export const cancelAllNotifications = async () => {
  * @returns {object} subscription to remove
  */
 export const addNotificationReceivedListener = (callback) => {
-  return Notifications.addNotificationReceivedListener(callback);
+  try {
+    const Notifications = getNotifications();
+    if (!Notifications) return { remove: () => {} };
+
+    return Notifications.addNotificationReceivedListener(callback);
+  } catch (error) {
+    console.error('[Notifications] Failed to add received listener:', error);
+    return { remove: () => {} };
+  }
 };
 
 /**
@@ -180,5 +264,13 @@ export const addNotificationReceivedListener = (callback) => {
  * @returns {object} subscription to remove
  */
 export const addNotificationResponseListener = (callback) => {
-  return Notifications.addNotificationResponseReceivedListener(callback);
+  try {
+    const Notifications = getNotifications();
+    if (!Notifications) return { remove: () => {} };
+
+    return Notifications.addNotificationResponseReceivedListener(callback);
+  } catch (error) {
+    console.error('[Notifications] Failed to add response listener:', error);
+    return { remove: () => {} };
+  }
 };

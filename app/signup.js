@@ -211,21 +211,22 @@ export default function SignUpScreen() {
             </TouchableOpacity>
 
             {/* Divider */}
-            <View style={styles.divider}>
+            {/* <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
-            </View>
+            </View> */}
 
             {/* Social Login */}
-            <View style={styles.socialButtons}>
+            {/* <View style={styles.socialButtons}>
               <TouchableOpacity style={styles.socialButton}>
                 <Ionicons name="logo-google" size={22} color={COLORS.textPrimary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.socialButton}>
                 <Ionicons name="logo-apple" size={22} color={COLORS.textPrimary} />
               </TouchableOpacity>
-            </View>
+            </View> */}
+
           </View>
 
           {/* Login Link */}
@@ -345,37 +346,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textWhite,
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: SPACING.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dividerText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginHorizontal: SPACING.md,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: SPACING.lg,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.backgroundCard,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...SHADOWS.small,
-  },
+  // divider: {
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   marginVertical: SPACING.xl,
+  // },
+  // dividerLine: {
+  //   flex: 1,
+  //   height: 1,
+  //   backgroundColor: COLORS.border,
+  // },
+  // dividerText: {
+  //   fontSize: FONTS.sizes.sm,
+  //   color: COLORS.textSecondary,
+  //   marginHorizontal: SPACING.md,
+  // },
+  // socialButtons: {
+  //   flexDirection: 'row',
+  //   justifyContent: 'center',
+  //   gap: SPACING.lg,
+  // },
+  // socialButton: {
+  //   width: 56,
+  //   height: 56,
+  //   borderRadius: 28,
+  //   backgroundColor: COLORS.backgroundCard,
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  //   borderWidth: 1,
+  //   borderColor: COLORS.border,
+  //   ...SHADOWS.small,
+  // },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
