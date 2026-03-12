@@ -10,6 +10,7 @@ import {
   query,
   where,
   getDocs,
+  onSnapshot,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../config';
@@ -211,12 +212,15 @@ export const updateHearts = async (userId, amount) => {
  * @param {string} userId 
  * @param {boolean} isPremium 
  * @param {Date|null} expiry 
+ * @param {boolean} hasUsedTrial
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
-export const updatePremiumStatus = async (userId, isPremium, expiry = null) => {
+export const updatePremiumStatus = async (userId, isPremium, expiry = null, hasUsedTrial = false) => {
   return updateUserProfile(userId, { 
     isPremium, 
-    premiumExpiry: expiry 
+    premiumExpiry: expiry,
+    hasUsedTrial,
+    trialExpiry: expiry,
   });
 };
 
@@ -290,4 +294,24 @@ export const getPartnerProfile = async (userId) => {
     console.error('Error getting partner profile:', error);
     return null;
   }
+};
+
+/**
+ * Subscribe to user profile changes (real-time)
+ * @param {string} userId 
+ * @param {function} callback 
+ * @returns {function} Unsubscribe function
+ */
+export const subscribeToUserProfile = (userId, callback) => {
+  const docRef = doc(db, USERS_COLLECTION, userId);
+  return onSnapshot(docRef, (doc) => {
+    if (doc.exists()) {
+      callback({ id: doc.id, ...doc.data() });
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    console.error('Error subscribing to user profile:', error);
+    callback(null);
+  });
 };

@@ -22,7 +22,7 @@ import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile, updateDisplayName } from '../../src/firebase/services/userService';
 import { getCouple, calculateDaysTogether, connectWithPartner } from '../../src/firebase/services/coupleService';
-import { logout } from '../../src/firebase/services/authService';
+import { logout, deleteAccount } from '../../src/firebase/services/authService';
 
 // Custom Toast Component
 function Toast({ visible, message, onHide }) {
@@ -165,8 +165,18 @@ export default function ProfileScreen() {
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
-            // TODO: Implement account deletion
-            showToast('Account deletion is not yet implemented');
+            const { success, error } = await deleteAccount();
+            if (success) {
+              router.replace('/welcome');
+            } else {
+              setAlertConfig({
+                visible: true,
+                type: 'error',
+                title: 'Delete Failed',
+                message: error || 'Failed to delete account. Please try again.',
+                buttons: [{ text: 'OK' }],
+              });
+            }
           }
         }
       ],

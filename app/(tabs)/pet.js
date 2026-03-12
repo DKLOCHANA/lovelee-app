@@ -14,7 +14,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
-import { usePetStore, useUserStore } from '../../src/store/store';
+import { useUserStore } from '../../src/store/store';
+import { useHearts } from '../../src/hooks/useHearts';
+import { usePet } from '../../src/hooks/usePet';
 import { PET_SKINS } from '../../src/constants/data';
 import Header from '../../src/components/Header';
 
@@ -31,15 +33,8 @@ const ANIMATIONS = {
 
 export default function PetScreen() {
   const router = useRouter();
-  const petName = usePetStore((state) => state.petName);
-  const petSkin = usePetStore((state) => state.petSkin);
-  const petHappiness = usePetStore((state) => state.petHappiness);
-  const petHunger = usePetStore((state) => state.petHunger);
-  const feedPet = usePetStore((state) => state.feedPet);
-  const playWithPet = usePetStore((state) => state.playWithPet);
-  const hearts = useUserStore((state) => state.hearts);
-  const addHearts = useUserStore((state) => state.addHearts);
-  const spendHearts = useUserStore((state) => state.spendHearts);
+  const { petName, petSkin, petHappiness, petHunger, feedPet, playWithPet } = usePet();
+  const { hearts, addHearts, spendHearts } = useHearts();
   const isPremium = useUserStore((state) => state.isPremium);
 
   const [showHearts, setShowHearts] = useState(false);

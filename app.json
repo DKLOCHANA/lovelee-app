@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pairly.app",
+      "bundleIdentifier": "com.pairlyapp.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -35,7 +35,8 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true
@@ -43,9 +44,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d98d0d9a-5374-49b5-8761-f67300b74f4f"
+        "projectId": "345ac956-8829-4c4f-aa7b-58be4cdc690f"
       }
     },
-    "owner": "lochanad23"
+    "owner": "lochanaclaudedev"
   }
 }

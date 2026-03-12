@@ -1,8 +1,8 @@
 // Firebase Auth Context Provider
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { onAuthStateChange } from './services/authService';
-import { getUserProfile } from './services/userService';
-import { getCouple, calculateDaysTogether } from './services/coupleService';
+import { getUserProfile, subscribeToUserProfile } from './services/userService';
+import { getCouple, calculateDaysTogether, subscribeToCoupleUpdates } from './services/coupleService';
 
 const AuthContext = createContext(null);
 
@@ -13,9 +13,16 @@ export const AuthProvider = ({ children }) => {
   const [couple, setCouple] = useState(null);
   const [loading, setLoading] = useState(true);
   const [daysTogether, setDaysTogether] = useState(0);
+  
+  // Keep track of subscription cleanup functions
+  const subscriptionsRef = useRef([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
+      // Clean up any existing subscriptions
+      subscriptionsRef.current.forEach(unsub => unsub());
+      subscriptionsRef.current = [];
+      
       setUser(firebaseUser);
       
       if (firebaseUser) {
@@ -24,15 +31,38 @@ export const AuthProvider = ({ children }) => {
           const userProfile = await getUserProfile(firebaseUser.uid);
           setProfile(userProfile);
           
+          // Subscribe to current user's profile updates
+          const unsubProfile = subscribeToUserProfile(firebaseUser.uid, (updatedProfile) => {
+            if (updatedProfile) {
+              setProfile(updatedProfile);
+            }
+          });
+          subscriptionsRef.current.push(unsubProfile);
+          
           // Get couple and partner data if connected
           if (userProfile?.coupleId) {
             const coupleData = await getCouple(userProfile.coupleId);
             setCouple(coupleData);
             setDaysTogether(calculateDaysTogether(coupleData));
             
+            // Subscribe to couple updates (real-time)
+            const unsubCouple = subscribeToCoupleUpdates(userProfile.coupleId, (updatedCouple) => {
+              if (updatedCouple) {
+                setCouple(updatedCouple);
+                setDaysTogether(calculateDaysTogether(updatedCouple));
+              }
+            });
+            subscriptionsRef.current.push(unsubCouple);
+            
             if (userProfile.partnerId) {
               const partnerProfile = await getUserProfile(userProfile.partnerId);
               setPartner(partnerProfile);
+              
+              // Subscribe to partner profile updates (real-time)
+              const unsubPartner = subscribeToUserProfile(userProfile.partnerId, (updatedPartner) => {
+                setPartner(updatedPartner);
+              });
+              subscriptionsRef.current.push(unsubPartner);
             }
           }
         } catch (error) {
@@ -48,7 +78,11 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      // Clean up all subscriptions on unmount
+      subscriptionsRef.current.forEach(unsub => unsub());
+    };
   }, []);
 
   // Refresh user data

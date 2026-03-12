@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useUserStore } from '../../src/store/store';
+import { useHearts } from '../../src/hooks/useHearts';
 import Header from '../../src/components/Header';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -30,9 +31,7 @@ const ANIMATIONS = {
 
 export default function PlantScreen() {
   const router = useRouter();
-  const hearts = useUserStore((state) => state.hearts);
-  const addHearts = useUserStore((state) => state.addHearts);
-  const spendHearts = useUserStore((state) => state.spendHearts);
+  const { hearts, addHearts, spendHearts } = useHearts();
   const isPremium = useUserStore((state) => state.isPremium);
 
   const [plantName, setPlantName] = useState('Rosie');
@@ -704,37 +703,43 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
+    flexWrap: 'wrap',
+    paddingHorizontal: SPACING.md,
     marginBottom: SPACING.lg,
+    justifyContent: 'center',
   },
   actionButton: {
-    flex: 1,
+    width: '22%',
+    minWidth: 70,
+    maxWidth: 90,
     backgroundColor: COLORS.backgroundCard,
     borderRadius: RADIUS.xl,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     alignItems: 'center',
     marginHorizontal: SPACING.xs,
+    marginVertical: SPACING.xs,
     ...SHADOWS.small,
   },
   actionButtonDisabled: {
     opacity: 0.5,
   },
   actionButtonEmoji: {
-    fontSize: 28,
-    marginBottom: SPACING.xs,
+    fontSize: 24,
+    marginBottom: 2,
   },
   actionButtonLabel: {
-    fontSize: FONTS.sizes.sm,
+    fontSize: FONTS.sizes.xs,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
+    marginBottom: 2,
+    textAlign: 'center',
   },
   actionButtonCost: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 10,
     color: COLORS.textSecondary,
   },
   actionButtonReward: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 10,
     color: COLORS.success,
     fontWeight: '600',
   },

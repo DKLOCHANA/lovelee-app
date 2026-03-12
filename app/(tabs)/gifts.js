@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useUserStore } from '../../src/store/store';
+import { useHearts } from '../../src/hooks/useHearts';
 import { GIFTS } from '../../src/constants/data';
 import Header from '../../src/components/Header';
 import CustomAlert from '../../src/components/CustomAlert';
@@ -22,8 +23,7 @@ import { sendGift as firebaseSendGift, subscribeToGifts } from '../../src/fireba
 
 export default function GiftsScreen() {
   const router = useRouter();
-  const hearts = useUserStore((state) => state.hearts);
-  const spendHearts = useUserStore((state) => state.spendHearts);
+  const { hearts, spendHearts, canAfford: canAffordHearts } = useHearts();
   const isPremium = useUserStore((state) => state.isPremium);
   
   const [profile, setProfile] = useState(null);
@@ -109,7 +109,8 @@ export default function GiftsScreen() {
       );
       
       if (result.success) {
-        spendHearts(selectedGift.hearts);
+        // Spend hearts with Firebase sync
+        await spendHearts(selectedGift.hearts);
         setSentGiftEmoji(selectedGift.emoji);
         setShowSentModal(true);
         setSelectedGift(null);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,22 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SHADOWS } from '../src/constants/theme';
 import { useUserStore } from '../src/store/store';
+import { auth } from '../src/firebase/config';
+import { updatePremiumStatus } from '../src/firebase/services/userService';
 
 const PremiumScreen = () => {
   const router = useRouter();
-  const { setPremium } = useUserStore();
+  const { setPremium, setTrialStatus, hasUsedTrial, isPremium } = useUserStore();
   const [selectedPlan, setSelectedPlan] = useState('trial'); // 'lifetime' or 'trial'
   const [freeTrialEnabled, setFreeTrialEnabled] = useState(true);
+
+  // If user has used trial, default to lifetime plan
+  useEffect(() => {
+    if (hasUsedTrial) {
+      setSelectedPlan('lifetime');
+      setFreeTrialEnabled(false);
+    }
+  }, [hasUsedTrial]);
 
   const features = [
     {
@@ -39,9 +49,31 @@ const PremiumScreen = () => {
     
   ];
 
-  const handlePurchase = () => {
-    // In real app, this would connect to App Store / Google Play
+  const handlePurchase = async () => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    // Calculate expiry date based on plan
+    let expiry = null;
+    let isTrialPurchase = false;
+    
+    if (selectedPlan === 'trial') {
+      // 3-day trial
+      expiry = new Date();
+      expiry.setDate(expiry.getDate() + 3);
+      isTrialPurchase = true;
+    }
+    // For lifetime, expiry is null (no expiry)
+
+    // Save to Firebase
+    await updatePremiumStatus(userId, true, expiry, isTrialPurchase || hasUsedTrial);
+    
+    // Update local store
     setPremium(true);
+    if (isTrialPurchase) {
+      setTrialStatus(true, expiry);
+    }
+    
     router.back();
   };
 
@@ -135,43 +167,53 @@ const PremiumScreen = () => {
             style={[
               styles.planCard,
               selectedPlan === 'trial' && styles.planCardSelected,
+              hasUsedTrial && styles.planCardDisabled,
             ]}
-            onPress={() => setSelectedPlan('trial')}
+            onPress={() => !hasUsedTrial && setSelectedPlan('trial')}
+            disabled={hasUsedTrial}
           >
             <View style={styles.planBadgeContainer}>
-              <View style={[styles.planBadge, styles.freeBadge]}>
-                <Text style={styles.planBadgeText}>FREE</Text>
+              <View style={[styles.planBadge, hasUsedTrial ? styles.usedBadge : styles.freeBadge]}>
+                <Text style={styles.planBadgeText}>{hasUsedTrial ? 'USED' : 'FREE'}</Text>
               </View>
             </View>
             <View style={styles.planContent}>
-              <Text style={styles.planTitle}>3-Day Trial</Text>
+              <Text style={[styles.planTitle, hasUsedTrial && styles.planTitleDisabled]}>3-Day Trial</Text>
               <View style={styles.priceRow}>
-                <Text style={styles.planSubtitle}>then </Text>
-                <Text style={styles.planPrice}>US$7.99</Text>
-                <Text style={styles.planPeriod}> per month</Text>
+                <Text style={[styles.planSubtitle, hasUsedTrial && styles.planTextDisabled]}>
+                  {hasUsedTrial ? 'Trial already used' : 'then '}
+                </Text>
+                {!hasUsedTrial && (
+                  <>
+                    <Text style={styles.planPrice}>US$7.99</Text>
+                    <Text style={styles.planPeriod}> per month</Text>
+                  </>
+                )}
               </View>
             </View>
             <View style={[
               styles.radioCircle,
-              selectedPlan === 'trial' && styles.radioCircleSelected
+              selectedPlan === 'trial' && !hasUsedTrial && styles.radioCircleSelected					
             ]}>
-              {selectedPlan === 'trial' && (
+              {selectedPlan === 'trial' && !hasUsedTrial && (
                 <View style={styles.radioInner} />
               )}
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Free Trial Toggle */}
-        <View style={styles.toggleContainer}>
-          <Text style={styles.toggleLabel}>Free Trial Enabled</Text>
-          <Switch
-            value={freeTrialEnabled}
-            onValueChange={setFreeTrialEnabled}
-            trackColor={{ false: COLORS.border, true: COLORS.accentGreen }}
-            thumbColor={COLORS.textWhite}
-          />
-        </View>
+        {/* Free Trial Toggle - only show if trial not used */}
+        {!hasUsedTrial && (
+          <View style={styles.toggleContainer}>
+            <Text style={styles.toggleLabel}>Free Trial Enabled</Text>
+            <Switch
+              value={freeTrialEnabled}
+              onValueChange={setFreeTrialEnabled}
+              trackColor={{ false: COLORS.border, true: COLORS.accentGreen }}
+              thumbColor={COLORS.textWhite}
+            />
+          </View>
+        )}
 
         {/* CTA Button */}
         <TouchableOpacity 
@@ -302,6 +344,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.secondary,
     backgroundColor: COLORS.backgroundPink,
   },
+  planCardDisabled: {
+    opacity: 0.6,
+  },
   planBadgeContainer: {
     marginRight: 12,
   },
@@ -315,6 +360,9 @@ const styles = StyleSheet.create({
   },
   freeBadge: {
     backgroundColor: COLORS.accentGreen,
+  },
+  usedBadge: {
+    backgroundColor: COLORS.textSecondary,
   },
   planBadgeText: {
     fontSize: 10,
@@ -330,6 +378,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 2,
+  },
+  planTitleDisabled: {
+    color: COLORS.textLight,
   },
   priceRow: {
     flexDirection: 'row',
@@ -347,6 +398,9 @@ const styles = StyleSheet.create({
   planSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+  planTextDisabled: {
+    color: COLORS.textLight,
   },
   radioCircle: {
     width: 24,

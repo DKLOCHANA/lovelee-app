@@ -8,9 +8,10 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithCredential,
+  deleteUser,
 } from 'firebase/auth';
 import { auth } from '../config';
-import { createUserProfile, getUserProfile } from './userService';
+import { createUserProfile, getUserProfile, deleteUserAccount } from './userService';
 
 /**
  * Register a new user with email and password
@@ -95,6 +96,41 @@ export const logout = async () => {
 };
 
 /**
+ * Delete user account completely (Firebase Auth + Firestore data)
+ * @returns {Promise<{success: boolean, error: string|null}>}
+ */
+export const deleteAccount = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: false, error: 'No user logged in' };
+    }
+    
+    // First delete Firestore user data
+    const deleteResult = await deleteUserAccount(user.uid);
+    if (!deleteResult.success) {
+      console.warn('Failed to delete user data:', deleteResult.error);
+      // Continue with auth deletion anyway
+    }
+    
+    // Then delete the Firebase Auth user
+    await deleteUser(user);
+    
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    // Handle re-authentication requirement
+    if (error.code === 'auth/requires-recent-login') {
+      return { 
+        success: false, 
+        error: 'For security, please log out and log back in, then try deleting your account again.' 
+      };
+    }
+    return { success: false, error: error.message || 'Failed to delete account' };
+  }
+};
+
+/**
  * Send password reset email
  * @param {string} email 
  * @returns {Promise<{success: boolean, error: string|null}>}
@@ -133,14 +169,19 @@ export const onAuthStateChange = (callback) => {
 const getAuthErrorMessage = (errorCode) => {
   const errorMessages = {
     'auth/email-already-in-use': 'This email is already registered',
-    'auth/invalid-email': 'Invalid email address',
+    'auth/invalid-email': 'Please enter a valid email address',
     'auth/operation-not-allowed': 'Operation not allowed',
-    'auth/weak-password': 'Password is too weak',
+    'auth/weak-password': 'Password is too weak. Use at least 6 characters',
     'auth/user-disabled': 'This account has been disabled',
     'auth/user-not-found': 'No account found with this email',
-    'auth/wrong-password': 'Incorrect password',
-    'auth/too-many-requests': 'Too many attempts. Please try again later',
+    'auth/wrong-password': 'Incorrect password. Please try again',
+    'auth/invalid-credential': 'Incorrect email or password. Please check your credentials',
+    'auth/invalid-login-credentials': 'Incorrect email or password. Please check your credentials',
+    'auth/missing-password': 'Please enter your password',
+    'auth/missing-email': 'Please enter your email address',
+    'auth/too-many-requests': 'Too many failed attempts. Please try again later',
     'auth/network-request-failed': 'Network error. Please check your connection',
+    'auth/requires-recent-login': 'Please log in again to perform this action',
   };
   return errorMessages[errorCode] || 'An error occurred. Please try again';
 };

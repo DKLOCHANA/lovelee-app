@@ -8,16 +8,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
-import { useUserStore } from '../../src/store/store';
 import { MOODS } from '../../src/constants/data';
 import Header from '../../src/components/Header';
 import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile } from '../../src/firebase/services/userService';
 import { setMood as firebaseSetMood, subscribeToMoods } from '../../src/firebase/services/moodService';
+import { useHearts } from '../../src/hooks/useHearts';
 
 export default function MoodScreen() {
-  const addHearts = useUserStore((state) => state.addHearts);
+  const { addHearts } = useHearts();
 
   const [profile, setProfile] = useState(null);
   const [currentMood, setCurrentMood] = useState(null);

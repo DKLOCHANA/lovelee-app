@@ -10,17 +10,41 @@ export const useUserStore = create((set, get) => ({
   daysTogether: 0,
   hearts: 100,
   isPremium: false,
+  hasUsedTrial: false,
+  trialExpiry: null,
+  heartsLoaded: false,
   
   setUser: (user) => set({ user }),
   setPartner: (partner) => set({ partner, isConnected: !!partner }),
   setDaysTogether: (days) => set({ daysTogether: days }),
-  addHearts: (amount) => set((state) => ({ hearts: state.hearts + amount })),
-  spendHearts: (amount) => set((state) => ({ 
-    hearts: Math.max(0, state.hearts - amount) 
-  })),
+  setHearts: (amount) => set({ hearts: amount, heartsLoaded: true }),
+  addHearts: (amount) => {
+    const newHearts = get().hearts + amount;
+    set({ hearts: newHearts });
+    return newHearts;
+  },
+  spendHearts: (amount) => {
+    const newHearts = Math.max(0, get().hearts - amount);
+    set({ hearts: newHearts });
+    return newHearts;
+  },
   setPremium: (status) => set({ isPremium: status }),
+  setTrialStatus: (hasUsed, expiry = null) => set({ hasUsedTrial: hasUsed, trialExpiry: expiry }),
   
-  // Initialize user from storage
+  // Initialize user from Firebase profile
+  initFromFirebase: (profile) => {
+    if (profile) {
+      set({
+        hearts: profile.hearts || 100,
+        isPremium: profile.isPremium || false,
+        hasUsedTrial: profile.hasUsedTrial || false,
+        trialExpiry: profile.trialExpiry || null,
+        heartsLoaded: true,
+      });
+    }
+  },
+  
+  // Initialize user from storage (fallback)
   initUser: async () => {
     try {
       const userData = await AsyncStorage.getItem('user');
@@ -129,9 +153,31 @@ export const usePetStore = create((set) => ({
   petHunger: 50,
   lastFed: null,
   lastPlayed: null,
+  petLoaded: false,
   
   setPetName: (name) => set({ petName: name }),
   setPetSkin: (skin) => set({ petSkin: skin }),
+  
+  // Initialize from Firebase couple data
+  initPetFromFirebase: (petData) => set({
+    petName: petData?.name || 'Piggy',
+    petSkin: petData?.skin || 'piggy',
+    petHappiness: petData?.happiness || 80,
+    petHunger: petData?.hunger || 50,
+    lastFed: petData?.lastFed || null,
+    lastPlayed: petData?.lastPlayed || null,
+    petLoaded: true,
+  }),
+  
+  // Sync from Firebase (for real-time updates)
+  syncFromFirebase: (petData) => set({
+    petName: petData?.name || 'Piggy',
+    petSkin: petData?.skin || 'piggy',
+    petHappiness: petData?.happiness || 80,
+    petHunger: petData?.hunger || 50,
+    lastFed: petData?.lastFed || null,
+    lastPlayed: petData?.lastPlayed || null,
+  }),
   
   feedPet: () => set((state) => ({
     petHunger: Math.min(100, state.petHunger + 20),

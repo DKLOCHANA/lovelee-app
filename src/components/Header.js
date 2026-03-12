@@ -2,21 +2,27 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import { useUserStore } from '../store/store';
 import { auth } from '../firebase/config';
 import { getUserProfile } from '../firebase/services/userService';
 
 export default function Header({ title, subtitle, showHearts = true, rightComponent, titleStyle, subtitleStyle, heartsContainerStyle }) {
-  const [hearts, setHearts] = useState(0);
+  const storeHearts = useUserStore((state) => state.hearts);
+  const heartsLoaded = useUserStore((state) => state.heartsLoaded);
+  const initFromFirebase = useUserStore((state) => state.initFromFirebase);
 
+  // Load hearts from Firebase if not already loaded
   useEffect(() => {
     const loadHearts = async () => {
-      if (auth.currentUser) {
+      if (!heartsLoaded && auth.currentUser) {
         const profile = await getUserProfile(auth.currentUser.uid);
-        setHearts(profile?.hearts || 0);
+        if (profile) {
+          initFromFirebase(profile);
+        }
       }
     };
     loadHearts();
-  }, []);
+  }, [heartsLoaded, initFromFirebase]);
 
   return (
     <View style={styles.header}>
@@ -33,7 +39,7 @@ export default function Header({ title, subtitle, showHearts = true, rightCompon
             size={18} 
             color={COLORS.secondary} 
           />
-          <Text style={styles.heartsCount}>{hearts}</Text>
+          <Text style={styles.heartsCount}>{storeHearts}</Text>
         </View>
       ) : null}
     </View>

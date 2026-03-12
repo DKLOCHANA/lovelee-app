@@ -1,7 +1,8 @@
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../src/firebase/config';
 import { useUserStore } from '../src/store/store';
@@ -14,18 +15,28 @@ import {
   addNotificationResponseListener,
 } from '../src/services/notificationService';
 
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignore errors if called too early
+});
+
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
+  const [firebaseError, setFirebaseError] = useState(null);
   const setUser = useUserStore((state) => state.setUser);
   const router = useRouter();
 
   // Request notification permission on first app open
   useEffect(() => {
     const setupNotifications = async () => {
-      const hasAsked = await hasAskedForPermission();
-      if (!hasAsked) {
-        // First time - request permission
-        await requestNotificationPermission();
+      try {
+        const hasAsked = await hasAskedForPermission();
+        if (!hasAsked) {
+          // First time - request permission
+          await requestNotificationPermission();
+        }
+      } catch (error) {
+        console.log('Notification setup error:', error);
       }
     };
 
@@ -74,21 +85,49 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Listen to Firebase auth state changes
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Update Zustand store with basic user info for local state
-        setUser({
-          uid: user.uid,
-          email: user.email,
-        });
-
-        // Register for push notifications and save token to Firebase
-        await registerForPushNotifications(user.uid);
-      } else {
-        setUser(null);
+    let unsubscribe = () => {};
+    
+    try {
+      // Check if Firebase auth is properly initialized
+      if (!auth) {
+        setFirebaseError('Firebase authentication not initialized. Check your configuration.');
+        setIsReady(true);
+        SplashScreen.hideAsync().catch(() => {});
+        return;
       }
+      
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        try {
+          if (user) {
+            // Update Zustand store with basic user info for local state
+            setUser({
+              uid: user.uid,
+              email: user.email,
+            });
+
+            // Register for push notifications and save token to Firebase
+            await registerForPushNotifications(user.uid);
+          } else {
+            setUser(null);
+          }
+        } catch (error) {
+          console.log('Auth state change error:', error);
+        }
+        setIsReady(true);
+        // Hide splash screen once ready
+        SplashScreen.hideAsync().catch(() => {});
+      }, (error) => {
+        console.error('Auth state listener error:', error);
+        setFirebaseError('Authentication error: ' + error.message);
+        setIsReady(true);
+        SplashScreen.hideAsync().catch(() => {});
+      });
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+      setFirebaseError('Failed to initialize Firebase: ' + error.message);
       setIsReady(true);
-    });
+      SplashScreen.hideAsync().catch(() => {});
+    }
 
     return () => unsubscribe();
   }, []);
@@ -98,6 +137,20 @@ export default function RootLayout() {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  // Show error if Firebase failed to initialize
+  if (firebaseError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background, padding: 20 }}>
+        <Text style={{ color: COLORS.error || '#FF6B6B', fontSize: 16, textAlign: 'center', marginBottom: 10 }}>
+          Configuration Error
+        </Text>
+        <Text style={{ color: COLORS.textSecondary || '#666', fontSize: 14, textAlign: 'center' }}>
+          {firebaseError}
+        </Text>
       </View>
     );
   }

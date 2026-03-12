@@ -15,6 +15,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
 import { useUserStore } from '../../src/store/store';
+import { useHearts } from '../../src/hooks/useHearts';
 import CustomAlert from '../../src/components/CustomAlert';
 import Header from '../../src/components/Header';
 
@@ -150,8 +151,7 @@ function MusicTrackCard({ track, isPlaying, isLoading, isSelected, onPress, onUn
 
 export default function MusicScreen() {
   const router = useRouter();
-  const hearts = useUserStore((state) => state.hearts);
-  const spendHearts = useUserStore((state) => state.spendHearts);
+  const { hearts, spendHearts } = useHearts();
   const isPremium = useUserStore((state) => state.isPremium);
 
   const [tracks, setTracks] = useState(MUSIC_TRACKS);

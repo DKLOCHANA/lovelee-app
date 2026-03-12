@@ -29,6 +29,7 @@ import {
   toggleNoteLike,
   deleteNote 
 } from '../../src/firebase/services/notesService';
+import { useHearts } from '../../src/hooks/useHearts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -64,7 +65,7 @@ export default function NotesScreen() {
   const incrementDoodleCount = useNotesStore((state) => state.incrementDoodleCount);
   const canDoodle = useNotesStore((state) => state.canDoodle);
   const getDoodlesRemaining = useNotesStore((state) => state.getDoodlesRemaining);
-  const addHearts = useUserStore((state) => state.addHearts);
+  const { addHearts } = useHearts();
   const isPremium = useUserStore((state) => state.isPremium);
 
   // Alert state
