@@ -37,7 +37,8 @@
       "expo-router",
       "expo-font",
       "expo-notifications",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

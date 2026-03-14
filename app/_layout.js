@@ -2,7 +2,6 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../src/firebase/config';
 import { useUserStore } from '../src/store/store';
@@ -16,11 +15,6 @@ import {
   addNotificationResponseListener,
 } from '../src/services/notificationService';
 
-// Prevent splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync().catch(() => {
-  // Ignore errors if called too early
-});
-
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const [firebaseError, setFirebaseError] = useState(null);
@@ -29,28 +23,14 @@ export default function RootLayout() {
 
   // Initialize notification handler and set up listeners
   useEffect(() => {
-<<<<<<< HEAD
-    const setupNotifications = async () => {
-      try {
-        const hasAsked = await hasAskedForPermission();
-        if (!hasAsked) {
-          // First time - request permission
-          await requestNotificationPermission();
-        }
-      } catch (error) {
-        console.log('Notification setup error:', error);
-      }
-    };
-=======
     let notificationListener = { remove: () => {} };
     let responseListener = { remove: () => {} };
->>>>>>> ce55440ebbc70156c2354a3e514aa4f95858474a
 
     try {
-      // Initialize the notification handler (safe — wrapped internally)
+      // Initialize notification handling on app launch.
       initNotificationHandler();
 
-      // Request permission on first app open
+      // Request permission on first app open.
       const setupNotifications = async () => {
         try {
           const hasAsked = await hasAskedForPermission();
@@ -71,7 +51,7 @@ export default function RootLayout() {
 
       responseListener = addNotificationResponseListener((response) => {
         console.log('Notification tapped:', response);
-        // Handle navigation based on notification data
+        // Navigate to relevant tab from notification payload.
         const data = response.notification.request.content.data;
         if (data?.type) {
           switch (data.type) {
@@ -106,71 +86,48 @@ export default function RootLayout() {
       notificationListener.remove();
       responseListener.remove();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    // Listen to Firebase auth state changes
-<<<<<<< HEAD
+    // Listen to Firebase auth state changes.
     let unsubscribe = () => {};
-    
+
     try {
-      // Check if Firebase auth is properly initialized
+      // Check if Firebase auth is properly initialized.
       if (!auth) {
         setFirebaseError('Firebase authentication not initialized. Check your configuration.');
         setIsReady(true);
-        SplashScreen.hideAsync().catch(() => {});
         return;
-=======
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        if (user) {
-          // Update Zustand store with basic user info for local state
-          setUser({
-            uid: user.uid,
-            email: user.email,
-          });
-
-          // Register for push notifications and save token to Firebase
-          await registerForPushNotifications(user.uid);
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('[Layout] Auth/notification registration error:', error);
->>>>>>> ce55440ebbc70156c2354a3e514aa4f95858474a
       }
-      
+
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         try {
           if (user) {
-            // Update Zustand store with basic user info for local state
+            // Keep local store in sync with authenticated user.
             setUser({
               uid: user.uid,
               email: user.email,
             });
 
-            // Register for push notifications and save token to Firebase
+            // Register and persist push token for this user.
             await registerForPushNotifications(user.uid);
           } else {
             setUser(null);
           }
         } catch (error) {
-          console.log('Auth state change error:', error);
+          console.error('[Layout] Auth state change error:', error);
         }
+
         setIsReady(true);
-        // Hide splash screen once ready
-        SplashScreen.hideAsync().catch(() => {});
       }, (error) => {
         console.error('Auth state listener error:', error);
         setFirebaseError('Authentication error: ' + error.message);
         setIsReady(true);
-        SplashScreen.hideAsync().catch(() => {});
       });
     } catch (error) {
       console.error('Firebase initialization error:', error);
       setFirebaseError('Failed to initialize Firebase: ' + error.message);
       setIsReady(true);
-      SplashScreen.hideAsync().catch(() => {});
     }
 
     return () => unsubscribe();
