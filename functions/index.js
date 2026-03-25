@@ -4,7 +4,12 @@
  */
 
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onRequest} = require("firebase-functions/v2/https");
+const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
+
+const rcSecretApiKey = defineSecret("REVENUECAT_SECRET_API_KEY");
+const rcWebhookSecret = defineSecret("REVENUECAT_WEBHOOK_SECRET");
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -290,7 +295,6 @@ exports.onDateCreated = onDocumentCreated("dates/{dateId}", async (event) => {
   const dateId = event.params.dateId;
   const creatorId = dateData.createdBy;
 
-  // Get creator's partner
   const creator = await getUserProfile(creatorId);
   if (!creator || !creator.partnerId) return null;
 
@@ -322,4 +326,269 @@ exports.onDateCreated = onDocumentCreated("dates/{dateId}", async (event) => {
 
   return null;
 });
+
+// ============================================
+// REVENUECAT — PARTNER PREMIUM SYNC
+// ============================================
+
+const RC_API_BASE = "https://api.revenuecat.com/v1";
+const RC_ENTITLEMENT_ID = "Pairly Pro";
+
+/**
+ * Grant a promotional entitlement to a user via RevenueCat REST API
+ */
+async function grantPromoEntitlement(appUserId, duration, secretKey) {
+  const encodedEntitlement = encodeURIComponent(RC_ENTITLEMENT_ID);
+  const url =
+    `${RC_API_BASE}/subscribers/${appUserId}` +
+    `/entitlements/${encodedEntitlement}/promotional`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({duration}),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("RC grant promo failed:", response.status, body);
+    return false;
+  }
+  console.log("RC promo granted to:", appUserId);
+  return true;
+}
+
+/**
+ * Revoke promotional entitlements from a user via RevenueCat REST API
+ */
+async function revokePromoEntitlement(appUserId, secretKey) {
+  const encodedEntitlement = encodeURIComponent(RC_ENTITLEMENT_ID);
+  const url =
+    `${RC_API_BASE}/subscribers/${appUserId}` +
+    `/entitlements/${encodedEntitlement}/revoke_promotionals`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("RC revoke promo failed:", response.status, body);
+    return false;
+  }
+  console.log("RC promo revoked from:", appUserId);
+  return true;
+}
+
+/**
+ * Check if a user has an active subscription in RevenueCat
+ */
+async function checkRCSubscription(appUserId, secretKey) {
+  const url = `${RC_API_BASE}/subscribers/${appUserId}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const entitlements = data?.subscriber?.entitlements;
+  if (!entitlements || !entitlements[RC_ENTITLEMENT_ID]) return null;
+
+  const ent = entitlements[RC_ENTITLEMENT_ID];
+  const expiresDate = ent.expires_date ? new Date(ent.expires_date) : null;
+  const isActive = !expiresDate || expiresDate > new Date();
+
+  return isActive ? ent : null;
+}
+
+/**
+ * Map RC product period to promo duration
+ */
+function mapProductToDuration(productId) {
+  if (!productId) return "monthly";
+  if (productId.includes("yearly") || productId.includes("annual")) {
+    return "yearly";
+  }
+  return "monthly";
+}
+
+/**
+ * RevenueCat Webhook Handler
+ * Receives purchase/cancellation/expiration events and syncs partner premium
+ */
+exports.revenuecatWebhook = onRequest(
+    {secrets: [rcSecretApiKey, rcWebhookSecret]},
+    async (req, res) => {
+      if (req.method !== "POST") {
+        return res.status(405).send("Method not allowed");
+      }
+
+      const authHeader = req.headers["authorization"];
+      const expectedSecret = rcWebhookSecret.value();
+      if (expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+        console.error("Webhook auth failed");
+        return res.status(401).send("Unauthorized");
+      }
+
+      const event = req.body?.event;
+      if (!event) {
+        return res.status(400).send("No event in payload");
+      }
+
+      const eventType = event.type;
+      const appUserId = event.app_user_id;
+      const productId = event.product_id;
+
+      console.log(`RC webhook: ${eventType} for user ${appUserId}`);
+
+      if (!appUserId) {
+        return res.status(400).send("No app_user_id");
+      }
+
+      const user = await getUserProfile(appUserId);
+      if (!user) {
+        console.log("User not found in Firestore:", appUserId);
+        return res.status(200).send("OK — user not found");
+      }
+
+      const partnerId = user.partnerId;
+      const secret = rcSecretApiKey.value();
+
+      const grantEvents = [
+        "INITIAL_PURCHASE",
+        "RENEWAL",
+        "PRODUCT_CHANGE",
+        "UNCANCELLATION",
+      ];
+      const revokeEvents = [
+        "CANCELLATION",
+        "EXPIRATION",
+        "BILLING_ISSUE",
+      ];
+
+      if (grantEvents.includes(eventType)) {
+        if (!partnerId) {
+          console.log(
+              "No partner — promo sync runs when couple connects (onCoupleCreated)",
+          );
+        } else {
+          const duration = mapProductToDuration(productId);
+          await grantPromoEntitlement(partnerId, duration, secret);
+        }
+      } else if (revokeEvents.includes(eventType)) {
+        if (partnerId) {
+          await revokePromoEntitlement(partnerId, secret);
+        }
+      }
+
+      return res.status(200).send("OK");
+    },
+);
+
+// ============================================
+// PARTNER CONNECT — RC PROMO SYNC (on couple create)
+// ============================================
+
+/**
+ * Structured log for Cloud Logging — filter: jsonPayload.fn="onCoupleCreated"
+ */
+function logCoupleConnect(step, payload = {}) {
+  console.log(JSON.stringify({
+    fn: "onCoupleCreated",
+    step,
+    ...payload,
+    at: new Date().toISOString(),
+  }));
+}
+
+/**
+ * Runs once when a couple document is created (partner connect batch).
+ * Partner sharing expects at least one paying user (active RC entitlement on
+ * either partner). If neither has a subscription, no promotional grants.
+ * One RC lookup per user (parallel). user2 sub → promo for user1; user1 sub →
+ * promo for user2 (both apply when both pay).
+ */
+exports.onCoupleCreated = onDocumentCreated(
+    {document: "couples/{coupleId}", secrets: [rcSecretApiKey]},
+    async (event) => {
+      const coupleId = event.params.coupleId;
+      try {
+        const couple = event.data.data();
+        const user1Id = couple?.user1Id;
+        const user2Id = couple?.user2Id;
+
+        logCoupleConnect("1_enter", {coupleId, user1Id, user2Id});
+
+        if (!user1Id || !user2Id) {
+          logCoupleConnect("2_skip_missing_user_ids", {coupleId});
+          return null;
+        }
+
+        const secret = rcSecretApiKey.value();
+
+        const [sub1, sub2] = await Promise.all([
+          checkRCSubscription(user1Id, secret),
+          checkRCSubscription(user2Id, secret),
+        ]);
+
+        logCoupleConnect("3_rc_status", {
+          user1Id,
+          user1HasSub: !!sub1,
+          user2Id,
+          user2HasSub: !!sub2,
+        });
+
+        const hasAtLeastOnePayingUser = !!(sub1 || sub2);
+        if (!hasAtLeastOnePayingUser) {
+          logCoupleConnect("4_no_paying_user", {
+            coupleId,
+            note: "Neither partner has active RC entitlement — no partner promos",
+          });
+          return null;
+        }
+
+        if (sub2) {
+          const duration = mapProductToDuration(sub2.product_identifier);
+          const granted = await grantPromoEntitlement(
+              user1Id, duration, secret);
+          logCoupleConnect("5_grant_user1_from_user2", {user1Id, duration, granted});
+        }
+
+        if (sub1) {
+          const duration = mapProductToDuration(sub1.product_identifier);
+          const granted = await grantPromoEntitlement(
+              user2Id, duration, secret);
+          logCoupleConnect("6_grant_user2_from_user1", {user2Id, duration, granted});
+        }
+
+        logCoupleConnect("7_done", {
+          coupleId, user1Id, user2Id, hasAtLeastOnePayingUser: true,
+        });
+        return null;
+      } catch (err) {
+        console.error(JSON.stringify({
+          fn: "onCoupleCreated",
+          step: "error",
+          coupleId,
+          message: err.message,
+          stack: err.stack,
+          at: new Date().toISOString(),
+        }));
+        throw err;
+      }
+    },
+);
 

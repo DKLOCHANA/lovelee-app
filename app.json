@@ -15,6 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "13",
+      "autoIncrement": true,
       "bundleIdentifier": "com.pairlyapp.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -46,9 +48,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "345ac956-8829-4c4f-aa7b-58be4cdc690f"
+        "projectId": "04ebdd59-272a-4917-a41f-51cebc6d4afd"
       }
     },
-    "owner": "lochanaclaudedev"
+    "owner": "kavindu_k"
   }
 }

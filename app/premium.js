@@ -6,29 +6,47 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
-  Switch,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SHADOWS } from '../src/constants/theme';
 import { useUserStore } from '../src/store/store';
-import { auth } from '../src/firebase/config';
-import { updatePremiumStatus } from '../src/firebase/services/userService';
+import {
+  getOfferings,
+  purchasePackage,
+  restorePurchases,
+  parseCustomerInfo,
+} from '../src/services/revenueCatService';
 
 const PremiumScreen = () => {
   const router = useRouter();
-  const { setPremium, setTrialStatus, hasUsedTrial, isPremium } = useUserStore();
-  const [selectedPlan, setSelectedPlan] = useState('trial'); // 'lifetime' or 'trial'
-  const [freeTrialEnabled, setFreeTrialEnabled] = useState(true);
+  const { mode = 'paywall' } = useLocalSearchParams();
+  const { setSubscriptionInfo } = useUserStore();
+  const [selectedPlan, setSelectedPlan] = useState('yearly');
+  const [offerings, setOfferings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
 
-  // If user has used trial, default to lifetime plan
+  const isExpiredMode = mode === 'expired';
+
   useEffect(() => {
-    if (hasUsedTrial) {
-      setSelectedPlan('lifetime');
-      setFreeTrialEnabled(false);
-    }
-  }, [hasUsedTrial]);
+    loadOfferings();
+  }, []);
+
+  const loadOfferings = async () => {
+    setLoading(true);
+    const current = await getOfferings();
+    setOfferings(current);
+    setLoading(false);
+  };
+
+  const yearlyPackage = offerings?.availablePackages?.find(
+    (p) => p.packageType === 'ANNUAL' || p.identifier === '$rc_annual'
+  );
+  const monthlyPackage = offerings?.availablePackages?.find(
+    (p) => p.packageType === 'MONTHLY' || p.identifier === '$rc_monthly'
+  );
 
   const features = [
     {
@@ -46,60 +64,58 @@ const PremiumScreen = () => {
       title: 'Full access to all Pro features',
       subtitle: '',
     },
-    
   ];
 
   const handlePurchase = async () => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+    if (!pkg) return;
 
-    // Calculate expiry date based on plan
-    let expiry = null;
-    let isTrialPurchase = false;
-    
-    if (selectedPlan === 'trial') {
-      // 3-day trial
-      expiry = new Date();
-      expiry.setDate(expiry.getDate() + 3);
-      isTrialPurchase = true;
-    }
-    // For lifetime, expiry is null (no expiry)
+    setPurchasing(true);
+    const { success, customerInfo, error } = await purchasePackage(pkg);
+    setPurchasing(false);
 
-    // Save to Firebase
-    await updatePremiumStatus(userId, true, expiry, isTrialPurchase || hasUsedTrial);
-    
-    // Update local store
-    setPremium(true);
-    if (isTrialPurchase) {
-      setTrialStatus(true, expiry);
+    if (success && customerInfo) {
+      setSubscriptionInfo(parseCustomerInfo(customerInfo));
+      router.back();
+    } else if (error && error !== 'cancelled') {
+      console.error('Purchase failed:', error);
     }
-    
-    router.back();
   };
 
-  const handleRestore = () => {
-    // In real app, this would restore purchases
-    alert('Restore purchases - Coming soon!');
+  const handleRestore = async () => {
+    setPurchasing(true);
+    const { success, customerInfo, error } = await restorePurchases();
+    setPurchasing(false);
+
+    if (success && customerInfo) {
+      const info = parseCustomerInfo(customerInfo);
+      setSubscriptionInfo(info);
+      if (info.isPremium) {
+        router.back();
+      }
+    }
   };
+
+  const yearlyPrice = yearlyPackage?.product?.priceString || 'US$39.99';
+  const monthlyPrice = monthlyPackage?.product?.priceString || 'US$7.99';
+  const yearlyHasTrial = yearlyPackage?.product?.introPrice != null;
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Close Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.closeButton}
           onPress={() => router.back()}
         >
           <Ionicons name="close" size={28} color={COLORS.textSecondary} />
         </TouchableOpacity>
 
-        {/* Pig Illustration */}
         <View style={styles.illustrationContainer}>
           <View style={styles.pigCircle}>
-            <Text style={styles.pigEmoji}>🐷</Text>
+            <Text style={styles.pigEmoji}>{isExpiredMode ? '😢' : '🐷'}</Text>
           </View>
           <View style={styles.heartFloatLeft}>
             <Ionicons name="heart" size={20} color={COLORS.heart} />
@@ -109,10 +125,17 @@ const PremiumScreen = () => {
           </View>
         </View>
 
-        {/* Title */}
-        <Text style={styles.title}>Unlock Pro levels of love</Text>
+        <Text style={styles.title}>
+          {isExpiredMode
+            ? 'Your Pro subscription has ended'
+            : 'Unlock Pro levels of love'}
+        </Text>
+        {isExpiredMode && (
+          <Text style={styles.subtitle}>
+            Resubscribe to continue enjoying Pro features with your partner
+          </Text>
+        )}
 
-        {/* Features List */}
         <View style={styles.featuresContainer}>
           {features.map((feature, index) => (
             <View key={index} style={styles.featureRow}>
@@ -130,104 +153,95 @@ const PremiumScreen = () => {
           ))}
         </View>
 
-        {/* Pricing Options */}
-        <View style={styles.plansContainer}>
-          {/* Lifetime Plan */}
-          <TouchableOpacity
-            style={[
-              styles.planCard,
-              selectedPlan === 'lifetime' && styles.planCardSelected,
-            ]}
-            onPress={() => setSelectedPlan('lifetime')}
-          >
-            <View style={styles.planBadgeContainer}>
-              <View style={[styles.planBadge, styles.payOnceBadge]}>
-                <Text style={styles.planBadgeText}>PAY ONCE</Text>
-              </View>
-            </View>
-            <View style={styles.planContent}>
-              <Text style={styles.planTitle}>Lifetime</Text>
-              <View style={styles.priceRow}>
-                <Text style={styles.planPrice}>US$39.99</Text>
-                <Text style={styles.planPeriod}> one-time</Text>
-              </View>
-            </View>
-            <View style={[
-              styles.radioCircle,
-              selectedPlan === 'lifetime' && styles.radioCircleSelected
-            ]}>
-              {selectedPlan === 'lifetime' && (
-                <View style={styles.radioInner} />
-              )}
-            </View>
-          </TouchableOpacity>
+        {loading ? (
+          <ActivityIndicator size="large" color={COLORS.secondary} style={{ marginVertical: 30 }} />
+        ) : (
+          <>
+            <View style={styles.plansContainer}>
+              {/* Yearly Plan */}
+              <TouchableOpacity
+                style={[
+                  styles.planCard,
+                  selectedPlan === 'yearly' && styles.planCardSelected,
+                ]}
+                onPress={() => setSelectedPlan('yearly')}
+              >
+                <View style={styles.planBadgeContainer}>
+                  {yearlyHasTrial ? (
+                    <View style={[styles.planBadge, styles.freeBadge]}>
+                      <Text style={styles.planBadgeText}>FREE TRIAL</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.planBadge, styles.bestValueBadge]}>
+                      <Text style={styles.planBadgeText}>BEST VALUE</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.planContent}>
+                  <Text style={styles.planTitle}>Yearly</Text>
+                  <View style={styles.priceRow}>
+                    {yearlyHasTrial && (
+                      <Text style={styles.planSubtitle}>3-day free trial, then </Text>
+                    )}
+                    <Text style={styles.planPrice}>{yearlyPrice}</Text>
+                    <Text style={styles.planPeriod}>/year</Text>
+                  </View>
+                </View>
+                <View style={[
+                  styles.radioCircle,
+                  selectedPlan === 'yearly' && styles.radioCircleSelected,
+                ]}>
+                  {selectedPlan === 'yearly' && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
 
-          {/* Trial Plan */}
-          <TouchableOpacity
-            style={[
-              styles.planCard,
-              selectedPlan === 'trial' && styles.planCardSelected,
-              hasUsedTrial && styles.planCardDisabled,
-            ]}
-            onPress={() => !hasUsedTrial && setSelectedPlan('trial')}
-            disabled={hasUsedTrial}
-          >
-            <View style={styles.planBadgeContainer}>
-              <View style={[styles.planBadge, hasUsedTrial ? styles.usedBadge : styles.freeBadge]}>
-                <Text style={styles.planBadgeText}>{hasUsedTrial ? 'USED' : 'FREE'}</Text>
-              </View>
+              {/* Monthly Plan */}
+              <TouchableOpacity
+                style={[
+                  styles.planCard,
+                  selectedPlan === 'monthly' && styles.planCardSelected,
+                ]}
+                onPress={() => setSelectedPlan('monthly')}
+              >
+                <View style={styles.planBadgeContainer}>
+                  <View style={[styles.planBadge, styles.monthlyBadge]}>
+                    <Text style={styles.planBadgeText}>MONTHLY</Text>
+                  </View>
+                </View>
+                <View style={styles.planContent}>
+                  <Text style={styles.planTitle}>Monthly</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.planPrice}>{monthlyPrice}</Text>
+                    <Text style={styles.planPeriod}>/month</Text>
+                  </View>
+                </View>
+                <View style={[
+                  styles.radioCircle,
+                  selectedPlan === 'monthly' && styles.radioCircleSelected,
+                ]}>
+                  {selectedPlan === 'monthly' && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
             </View>
-            <View style={styles.planContent}>
-              <Text style={[styles.planTitle, hasUsedTrial && styles.planTitleDisabled]}>3-Day Trial</Text>
-              <View style={styles.priceRow}>
-                <Text style={[styles.planSubtitle, hasUsedTrial && styles.planTextDisabled]}>
-                  {hasUsedTrial ? 'Trial already used' : 'then '}
-                </Text>
-                {!hasUsedTrial && (
-                  <>
-                    <Text style={styles.planPrice}>US$7.99</Text>
-                    <Text style={styles.planPeriod}> per month</Text>
-                  </>
-                )}
-              </View>
-            </View>
-            <View style={[
-              styles.radioCircle,
-              selectedPlan === 'trial' && !hasUsedTrial && styles.radioCircleSelected					
-            ]}>
-              {selectedPlan === 'trial' && !hasUsedTrial && (
-                <View style={styles.radioInner} />
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
 
-        {/* Free Trial Toggle - only show if trial not used */}
-        {!hasUsedTrial && (
-          <View style={styles.toggleContainer}>
-            <Text style={styles.toggleLabel}>Free Trial Enabled</Text>
-            <Switch
-              value={freeTrialEnabled}
-              onValueChange={setFreeTrialEnabled}
-              trackColor={{ false: COLORS.border, true: COLORS.accentGreen }}
-              thumbColor={COLORS.textWhite}
-            />
-          </View>
+            <TouchableOpacity
+              style={[styles.ctaButton, purchasing && { opacity: 0.6 }]}
+              onPress={handlePurchase}
+              disabled={purchasing}
+            >
+              <Text style={styles.ctaButtonText}>
+                {purchasing
+                  ? 'Processing...'
+                  : selectedPlan === 'yearly' && yearlyHasTrial
+                    ? 'Try for free'
+                    : 'Subscribe now'}
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* CTA Button */}
-        <TouchableOpacity 
-          style={styles.ctaButton}
-          onPress={handlePurchase}
-        >
-          <Text style={styles.ctaButtonText}>
-            {selectedPlan === 'trial' ? 'Try for free' : 'Purchase now'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Footer Links */}
         <View style={styles.footerLinks}>
-          <TouchableOpacity onPress={handleRestore}>
+          <TouchableOpacity onPress={handleRestore} disabled={purchasing}>
             <Text style={styles.footerLink}>Restore</Text>
           </TouchableOpacity>
           <Text style={styles.footerDivider}>|</Text>
@@ -289,7 +303,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   featuresContainer: {
     marginBottom: 24,
@@ -344,9 +365,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.secondary,
     backgroundColor: COLORS.backgroundPink,
   },
-  planCardDisabled: {
-    opacity: 0.6,
-  },
   planBadgeContainer: {
     marginRight: 12,
   },
@@ -355,13 +373,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  payOnceBadge: {
-    backgroundColor: COLORS.secondaryLight,
-  },
   freeBadge: {
     backgroundColor: COLORS.accentGreen,
   },
-  usedBadge: {
+  bestValueBadge: {
+    backgroundColor: COLORS.secondaryLight,
+  },
+  monthlyBadge: {
     backgroundColor: COLORS.textSecondary,
   },
   planBadgeText: {
@@ -379,12 +397,10 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
-  planTitleDisabled: {
-    color: COLORS.textLight,
-  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    flexWrap: 'wrap',
   },
   planPrice: {
     fontSize: 15,
@@ -398,9 +414,6 @@ const styles = StyleSheet.create({
   planSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
-  },
-  planTextDisabled: {
-    color: COLORS.textLight,
   },
   radioCircle: {
     width: 24,
@@ -419,22 +432,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: COLORS.secondary,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.backgroundCard,
-    borderRadius: 12,
-    marginBottom: 20,
-    ...SHADOWS.small,
-  },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
   },
   ctaButton: {
     backgroundColor: COLORS.secondary,

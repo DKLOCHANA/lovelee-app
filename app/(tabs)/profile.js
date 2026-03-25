@@ -16,13 +16,15 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../src/constants/theme';
-import { useNotesStore } from '../../src/store/store';
+import { useNotesStore, useUserStore } from '../../src/store/store';
 import CustomAlert from '../../src/components/CustomAlert';
 import { auth } from '../../src/firebase/config';
 import { getUserProfile, updateDisplayName } from '../../src/firebase/services/userService';
 import { getCouple, calculateDaysTogether, connectWithPartner } from '../../src/firebase/services/coupleService';
 import { logout, deleteAccount } from '../../src/firebase/services/authService';
+import { is } from 'date-fns/locale';
 
 // Custom Toast Component
 function Toast({ visible, message, onHide }) {
@@ -56,6 +58,73 @@ function Toast({ visible, message, onHide }) {
   );
 }
 
+// Subscription Card Component
+// 4 states: manage, gifted (hidden), expired, upgrade
+function SubscriptionCard({ isPremium, isPromotional, hasPurchaseHistory, subscriptionPlan, expirationDate }) {
+  const router = useRouter();
+
+  // isPremium && !isPromotional → manage subscription
+  // isPremium && isPromotional → gifted by partner (no card)
+  // !isPremium && hasPurchaseHistory → expired
+  // !isPremium && !hasPurchaseHistory → upgrade
+  if (isPremium && isPromotional) return null;
+
+  const isExpired = !isPremium && hasPurchaseHistory;
+  const config = isPremium
+    ? {
+        icon: 'checkmark-circle',
+        iconColor: COLORS.secondary,
+        title: 'Lovelee Pro',
+        subtitle: expirationDate
+          ? `${subscriptionPlan === 'yearly' ? 'Yearly' : 'Monthly'} · Renews ${expirationDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+          : 'You have all premium features!',
+        onPress: () => Linking.openURL('https://apps.apple.com/account/subscriptions'),
+        isError: false,
+      }
+    : isExpired
+    ? {
+        icon: 'alert-circle',
+        iconColor: COLORS.error,
+        title: 'Subscription Expired',
+        subtitle: 'Your Pro access has ended',
+        onPress: () => router.push({ pathname: '/premium', params: { mode: 'expired' } }),
+        isError: true,
+      }
+    : {
+        icon: 'diamond',
+        iconColor: COLORS.secondary,
+        title: 'Upgrade to Pro',
+        subtitle: 'Unlock unlimited features',
+        onPress: () => router.push({ pathname: '/premium', params: { mode: 'paywall' } }),
+        isError: false,
+      };
+
+  return (
+    <TouchableOpacity
+      style={[styles.premiumCard, config.isError && styles.premiumCardExpired]}
+      onPress={config.onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.premiumRow}>
+        <View style={[styles.premiumIconContainer, config.isError && styles.premiumIconExpired]}>
+          <Ionicons name={config.icon} size={24} color={config.iconColor} />
+        </View>
+        <View style={styles.premiumTextContainer}>
+          <Text style={[styles.premiumTitle, config.isError && styles.premiumTitleExpired]}>
+            {config.title}
+          </Text>
+          <Text style={styles.premiumSubtext}>{config.subtitle}</Text>
+        </View>
+        <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={config.isError ? COLORS.error : COLORS.secondary}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [showNameModal, setShowNameModal] = useState(false);
@@ -81,6 +150,7 @@ export default function ProfileScreen() {
   });
   
   const sentNotes = useNotesStore((state) => state.sentNotes);
+  const { isPremium, isPromotional, hasPurchaseHistory, subscriptionPlan, expirationDate } = useUserStore();
 
   // Load profile data from Firebase
   useEffect(() => {
@@ -526,26 +596,14 @@ export default function ProfileScreen() {
         )}
 
         {/* Subscription Section - Always show */}
-        <Text style={styles.sectionLabel}>Subscription</Text>
-        <TouchableOpacity 
-          style={styles.premiumCard}
-          onPress={() => router.push('/premium')}
-        >
-          <View style={styles.premiumRow}>
-            <View style={styles.premiumIconContainer}>
-              <Ionicons name="diamond" size={24} color={COLORS.secondary} />
-            </View>
-            <View style={styles.premiumTextContainer}>
-              <Text style={styles.premiumTitle}>
-                {profileData.isPremium ? 'Pairly Pro' : 'Upgrade to Pro'}
-              </Text>
-              <Text style={styles.premiumSubtext}>
-                {profileData.isPremium ? 'You have all premium features!' : 'Unlock unlimited features'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.secondary} />
-          </View>
-        </TouchableOpacity>
+        {(isPremium && isPromotional) ? null : <Text style={styles.sectionLabel}>Subscription</Text>}
+        <SubscriptionCard
+          isPremium={isPremium}
+          isPromotional={isPromotional}
+          hasPurchaseHistory={hasPurchaseHistory}
+          subscriptionPlan={subscriptionPlan}
+          expirationDate={expirationDate}
+        />
 
         {/* Account Section - Always show */}
         <Text style={styles.sectionLabel}>Account</Text>
@@ -946,6 +1004,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: SPACING.md,
   },
+  premiumCardExpired: {
+    borderColor: COLORS.error,
+    borderWidth: 2,
+  },
+  premiumIconExpired: {
+    backgroundColor: '#FFF0F0',
+  },
   premiumTextContainer: {
     flex: 1,
   },
@@ -953,6 +1018,9 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     fontWeight: '700',
     color: COLORS.secondary,
+  },
+  premiumTitleExpired: {
+    color: COLORS.error,
   },
   premiumSubtext: {
     fontSize: FONTS.sizes.sm,

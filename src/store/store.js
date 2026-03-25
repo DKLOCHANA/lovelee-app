@@ -10,6 +10,10 @@ export const useUserStore = create((set, get) => ({
   daysTogether: 0,
   hearts: 100,
   isPremium: false,
+  isPromotional: false,
+  hasPurchaseHistory: false,
+  subscriptionPlan: null, // 'yearly' | 'monthly' | null
+  expirationDate: null,
   hasUsedTrial: false,
   trialExpiry: null,
   heartsLoaded: false,
@@ -29,6 +33,13 @@ export const useUserStore = create((set, get) => ({
     return newHearts;
   },
   setPremium: (status) => set({ isPremium: status }),
+  setSubscriptionInfo: (info) => set({
+    isPremium: info.isPremium,
+    isPromotional: info.isPromotional,
+    hasPurchaseHistory: info.hasPurchaseHistory,
+    subscriptionPlan: info.subscriptionPlan,
+    expirationDate: info.expirationDate,
+  }),
   setTrialStatus: (hasUsed, expiry = null) => set({ hasUsedTrial: hasUsed, trialExpiry: expiry }),
   
   // Initialize user from Firebase profile
@@ -36,9 +47,6 @@ export const useUserStore = create((set, get) => ({
     if (profile) {
       set({
         hearts: profile.hearts || 100,
-        isPremium: profile.isPremium || false,
-        hasUsedTrial: profile.hasUsedTrial || false,
-        trialExpiry: profile.trialExpiry || null,
         heartsLoaded: true,
       });
     }

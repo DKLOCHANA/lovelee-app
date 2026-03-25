@@ -14,12 +14,29 @@ import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
 } from '../src/services/notificationService';
+import {
+  initRevenueCat,
+  identifyUser,
+  logoutUser,
+  addCustomerInfoListener,
+  parseCustomerInfo,
+} from '../src/services/revenueCatService';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const [firebaseError, setFirebaseError] = useState(null);
   const setUser = useUserStore((state) => state.setUser);
+  const setSubscriptionInfo = useUserStore((state) => state.setSubscriptionInfo);
   const router = useRouter();
+
+  // Initialize RevenueCat on mount
+  useEffect(() => {
+    initRevenueCat();
+
+    addCustomerInfoListener((customerInfo) => {
+      setSubscriptionInfo(parseCustomerInfo(customerInfo));
+    });
+  }, []);
 
   // Initialize notification handler and set up listeners
   useEffect(() => {
@@ -45,12 +62,9 @@ export default function RootLayout() {
       setupNotifications();
 
       // Set up notification listeners (safe — return no-op on failure)
-      notificationListener = addNotificationReceivedListener((notification) => {
-        console.log('Notification received:', notification);
-      });
+      notificationListener = addNotificationReceivedListener(() => {});
 
       responseListener = addNotificationResponseListener((response) => {
-        console.log('Notification tapped:', response);
         // Navigate to relevant tab from notification payload.
         const data = response.notification.request.content.data;
         if (data?.type) {
@@ -103,16 +117,20 @@ export default function RootLayout() {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         try {
           if (user) {
-            // Keep local store in sync with authenticated user.
             setUser({
               uid: user.uid,
               email: user.email,
             });
 
-            // Register and persist push token for this user.
             await registerForPushNotifications(user.uid);
+
+            const customerInfo = await identifyUser(user.uid);
+            if (customerInfo) {
+              setSubscriptionInfo(parseCustomerInfo(customerInfo));
+            }
           } else {
             setUser(null);
+            await logoutUser();
           }
         } catch (error) {
           console.error('[Layout] Auth state change error:', error);
