@@ -117,10 +117,10 @@ export const getUserByInviteCode = async (inviteCode) => {
 export const updateUserProfile = async (userId, updates) => {
   try {
     const docRef = doc(db, USERS_COLLECTION, userId);
-    await updateDoc(docRef, {
+    await setDoc(docRef, {
       ...updates,
       updatedAt: serverTimestamp(),
-    });
+    }, { merge: true });
     return { success: true, error: null };
   } catch (error) {
     console.error('Error updating user profile:', error);
